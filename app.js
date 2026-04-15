@@ -397,8 +397,12 @@ function renderList(side, container) {
 
     const controls = document.createElement('div');
     controls.className = 'segment-controls';
-    controls.append(controlButton('上移', () => moveSegment(side, segment, -1)));
-    controls.append(controlButton('下移', () => moveSegment(side, segment, 1)));
+    const enabledIndex = enabled.indexOf(segment);
+    const upButton = controlButton('上移', () => moveSegment(side, segment, -1));
+    const downButton = controlButton('下移', () => moveSegment(side, segment, 1));
+    upButton.disabled = enabledIndex <= 0;
+    downButton.disabled = enabledIndex === -1 || enabledIndex >= enabled.length - 1;
+    controls.append(upButton, downButton);
 
     row.append(checkbox, text, controls);
     container.append(row);
@@ -418,28 +422,23 @@ function controlButton(label, onClick) {
 }
 
 function toggleSegment(side, id, checked) {
-  const enabled = new Set(state[side]);
+  const next = state[side].filter((item) => item !== id);
   if (checked) {
-    enabled.add(id);
-  } else {
-    enabled.delete(id);
+    next.push(id);
   }
-  state[side] = state[`${side}Order`].filter((item) => enabled.has(item));
+  state[side] = next;
   render();
   scheduleRealRender();
 }
 
 function moveSegment(side, id, delta) {
-  const orderKey = `${side}Order`;
-  const list = [...state[orderKey]];
+  const list = [...state[side]];
   const index = list.indexOf(id);
   if (index < 0) return;
   const next = index + delta;
   if (next < 0 || next >= list.length) return;
   [list[index], list[next]] = [list[next], list[index]];
-  state[orderKey] = list;
-  const enabled = new Set(state[side]);
-  state[side] = list.filter((item) => enabled.has(item));
+  state[side] = list;
   render();
   scheduleRealRender();
 }
@@ -615,38 +614,40 @@ function fallbackConfigText() {
 }
 
 function renderPreview() {
-  const leftBeforeNewline = itemsBeforeNewline(state.left);
-  const rightBeforeNewline = itemsBeforeNewline(state.right);
+  const leftLines = splitByNewline(state.left);
+  const rightLines = splitByNewline(state.right);
   const usesNewline = state.left.includes('newline') || state.right.includes('newline');
   const line1 = document.querySelector('#preview-line-1');
   const line2 = document.querySelector('#preview-line-2');
   realPromptEl.innerHTML = backendMode === 'real'
     ? (realRender.error ? `<span class="ansi-error">${escapeHtml(realRender.error)}</span>` : ansiToHtml(realRender.ansi))
-    : renderStaticPrompt(leftBeforeNewline, rightBeforeNewline, usesNewline);
+    : renderStaticPrompt(leftLines, rightLines, usesNewline);
   realPromptEl.hidden = backendMode === 'real' && !realRender.ansi && !realRender.error;
   document.querySelector('#preview-left-frame').textContent = usesNewline ? '╭─' : '─';
   document.querySelector('#preview-right-frame').textContent = usesNewline ? '─╮' : '─';
   line1.classList.toggle('single-line', !usesNewline);
   line2.hidden = !usesNewline;
-  document.querySelector('#left-preview').innerHTML = leftBeforeNewline
+  document.querySelector('#left-preview').innerHTML = leftLines.before
     .map((id) => renderPreviewSegment(id))
     .join('');
-  document.querySelector('#right-preview').innerHTML = rightBeforeNewline
+  document.querySelector('#right-preview').innerHTML = rightLines.before
     .slice(0, 8)
     .map((id) => renderPreviewSegment(id))
     .join('');
 }
 
-function renderStaticPrompt(leftItems, rightItems, usesNewline) {
-  const left = leftItems.map((id) => staticSegment(id, 'left')).join('');
-  const right = rightItems.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
+function renderStaticPrompt(leftLines, rightLines, usesNewline) {
+  const left = leftLines.before.map((id) => staticSegment(id, 'left')).join('');
+  const right = rightLines.before.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
   const gap = '<span class="static-gap">··································</span>';
   if (!usesNewline) {
     return `<div class="static-prompt-row">─${left}${gap}${right}─</div>`;
   }
+  const bottomLeft = leftLines.after.map((id) => staticSegment(id, 'left')).join('');
+  const bottomRight = rightLines.after.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
   return [
     `<div class="static-prompt-row">╭─${left}${gap}${right}─╮</div>`,
-    '<div class="static-prompt-row">╰─ gf run main.go <span class="static-gap">················</span>─╯</div>',
+    `<div class="static-prompt-row">╰─${bottomLeft} gf run main.go <span class="static-gap">················</span>${bottomRight}─╯</div>`,
   ].join('');
 }
 
@@ -738,10 +739,15 @@ function renderPreviewSegment(id) {
   return `<span title="${escapeHtml(segmentInfo(id)[1])}">${escapeHtml(value)}</span>`;
 }
 
-function itemsBeforeNewline(items) {
+function splitByNewline(items) {
   const index = items.indexOf('newline');
-  const visible = index === -1 ? items : items.slice(0, index);
-  return visible.filter((id) => id !== 'newline');
+  if (index === -1) {
+    return { before: items.filter((id) => id !== 'newline'), after: [] };
+  }
+  return {
+    before: items.slice(0, index).filter((id) => id !== 'newline'),
+    after: items.slice(index + 1).filter((id) => id !== 'newline'),
+  };
 }
 
 function escapeHtml(text) {
