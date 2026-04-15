@@ -9,7 +9,7 @@ const childProcess = require('child_process');
 
 const PORT = Number(process.env.PORT || 48731);
 const HOST = '127.0.0.1';
-const CONFIG_PATH = process.env.P10K_CONFIG || path.join(os.homedir(), '.p10k.zsh');
+const DEFAULT_CONFIG_PATH = process.env.P10K_CONFIG || path.join(os.homedir(), '.p10k.zsh');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const segmentCatalog = [
@@ -85,8 +85,15 @@ const settingsCatalog = [
   ['POWERLEVEL9K_INSTANT_PROMPT', 'raw', 'Instant prompt'],
 ];
 
-function readConfig() {
-  return fs.readFileSync(CONFIG_PATH, 'utf8');
+function resolveConfigPath(inputPath) {
+  if (!inputPath) return DEFAULT_CONFIG_PATH;
+  if (inputPath === '~') return os.homedir();
+  if (inputPath.startsWith('~/')) return path.join(os.homedir(), inputPath.slice(2));
+  return path.resolve(inputPath);
+}
+
+function readConfig(configPath = DEFAULT_CONFIG_PATH) {
+  return fs.readFileSync(configPath, 'utf8');
 }
 
 function writeJson(res, status, data) {
@@ -138,8 +145,8 @@ function parseScalar(text, name) {
   return match[1].trim().replace(/^'(.*)'$/, '$1');
 }
 
-function parseConfig() {
-  const text = readConfig();
+function parseConfig(configPath = DEFAULT_CONFIG_PATH) {
+  const text = readConfig(configPath);
   const left = parseArray(text, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS')
     .filter((item) => item.enabled)
     .map((item) => item.id);
@@ -149,7 +156,7 @@ function parseConfig() {
   const settings = Object.fromEntries(
     settingsCatalog.map(([name]) => [name, parseScalar(text, name)])
   );
-  return { path: CONFIG_PATH, left, right, settings, catalog: segmentCatalog, settingsCatalog };
+  return { path: configPath, left, right, settings, catalog: segmentCatalog, settingsCatalog };
 }
 
 function runCommand(command, args, cwd) {
@@ -335,8 +342,9 @@ function buildConfig(input, original) {
 }
 
 function renderPromptWithConfig(dirInput, columnsInput, input) {
+  const configPath = resolveConfigPath(input.configPath);
   const tempPath = path.join(os.tmpdir(), `p10k-editor-preview-${process.pid}-${Date.now()}.zsh`);
-  fs.writeFileSync(tempPath, buildConfig(input, readConfig()));
+  fs.writeFileSync(tempPath, buildConfig(input, readConfig(configPath)));
   try {
     return renderPrompt(dirInput, columnsInput, tempPath);
   } finally {
@@ -390,12 +398,13 @@ function replaceScalar(text, name, type, value) {
 }
 
 function saveConfig(input) {
+  const configPath = resolveConfigPath(input.configPath);
   const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '');
-  const backupPath = `${CONFIG_PATH}.p10k-editor.${timestamp}.bak`;
-  const original = readConfig();
-  fs.copyFileSync(CONFIG_PATH, backupPath);
+  const backupPath = `${configPath}.p10k-editor.${timestamp}.bak`;
+  const original = readConfig(configPath);
+  fs.copyFileSync(configPath, backupPath);
   const next = buildConfig(input, original);
-  fs.writeFileSync(CONFIG_PATH, next);
+  fs.writeFileSync(configPath, next);
   return { backupPath };
 }
 
@@ -426,8 +435,14 @@ const server = http.createServer(async (req, res) => {
       writeJson(res, 200, parseConfig());
       return;
     }
-    if (req.method === 'GET' && req.url === '/api/raw') {
-      const raw = readConfig();
+    if (req.method === 'GET' && req.url.startsWith('/api/config')) {
+      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      writeJson(res, 200, parseConfig(resolveConfigPath(requestUrl.searchParams.get('path'))));
+      return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/raw')) {
+      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      const raw = readConfig(resolveConfigPath(requestUrl.searchParams.get('path')));
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       res.end(raw);
       return;
@@ -457,8 +472,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/api/config') {
       const body = await readBody(req);
-      const result = saveConfig(JSON.parse(body));
-      writeJson(res, 200, { ok: true, ...result, config: parseConfig() });
+      const parsed = JSON.parse(body);
+      const result = saveConfig(parsed);
+      writeJson(res, 200, {
+        ok: true,
+        ...result,
+        config: parseConfig(resolveConfigPath(parsed.configPath)),
+      });
       return;
     }
     serveStatic(req, res);
@@ -469,5 +489,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Powerlevel10k editor: http://${HOST}:${PORT}`);
-  console.log(`Editing: ${CONFIG_PATH}`);
+  console.log(`Default config: ${DEFAULT_CONFIG_PATH}`);
 });

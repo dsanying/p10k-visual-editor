@@ -22,10 +22,28 @@
 
       <section id="message" class="message" hidden></section>
 
+      <section class="config-panel">
+        <div>
+          <h2>配置文件</h2>
+          <p id="config-help">会优先自动加载默认 Powerlevel10k 配置。也可以手动指定或选择配置文件。</p>
+        </div>
+        <div class="config-controls">
+          <label>
+            配置路径
+            <input id="config-path-input" type="text" spellcheck="false" placeholder="~/.p10k.zsh">
+          </label>
+          <button id="load-config" type="button">加载路径</button>
+          <label class="file-button">
+            选择文件
+            <input id="config-file-input" type="file" accept=".zsh,.txt,text/plain">
+          </label>
+        </div>
+      </section>
+
       <section class="preview-band">
         <div class="preview-toolbar">
           <div>
-            <div class="preview-title">zsh 真实渲染预览</div>
+            <div class="preview-title">配置预览</div>
             <p id="preview-note">正在检测运行模式...</p>
           </div>
           <label class="preview-dir">

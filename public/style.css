@@ -112,6 +112,57 @@ button:disabled {
   color: var(--warn);
 }
 
+.config-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 1.3fr);
+  gap: 16px;
+  align-items: end;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.config-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.config-controls label,
+.file-button {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.config-controls input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.file-button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  padding: 9px 13px;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+.file-button input {
+  display: none;
+}
+
 .preview-band {
   position: sticky;
   top: 0;
@@ -385,8 +436,14 @@ pre {
   }
 
   .topbar,
-  .layout {
+  .layout,
+  .config-panel {
     display: block;
+  }
+
+  .config-controls {
+    grid-template-columns: 1fr;
+    margin-top: 14px;
   }
 
   .actions {

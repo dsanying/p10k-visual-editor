@@ -17,17 +17,23 @@ const previewNote = document.querySelector('#preview-note');
 const realPromptEl = document.querySelector('#real-prompt');
 const saveButton = document.querySelector('#save');
 const settingsNote = document.querySelector('#settings-note');
+const configPathInput = document.querySelector('#config-path-input');
+const loadConfigButton = document.querySelector('#load-config');
+const configFileInput = document.querySelector('#config-file-input');
+const configHelp = document.querySelector('#config-help');
 let snapshot = { values: {} };
 let realRender = { ansi: '', error: '' };
 let snapshotTimer = null;
 let renderTimer = null;
+let uploadedConfigText = '';
+let uploadedFileName = '.p10k.zsh';
 
 const segmentExamples = {
   newline: ['第一行显示路径，第二行输入命令', '所有内容尽量挤在同一行'],
   os_icon: [' ~/project', '~/project'],
-  dir: ['~/Desktop/Github/UniAuth/uniauth-gf', '不显示当前位置'],
-  vcs: ['on perf/i18n-zbw *1', '不显示 Git 分支和改动状态'],
-  prompt_char: ['❯ gf run main.go', '直接从边框后开始输入'],
+  dir: ['~/Desktop/project', '不显示当前位置'],
+  vcs: ['on main *1', '不显示 Git 分支和改动状态'],
+  prompt_char: ['❯ npm start', '直接从边框后开始输入'],
   status: ['128 ✘', '不显示上一条命令是否失败'],
   command_execution_time: ['took 8s', '不显示上一条命令耗时'],
   background_jobs: ['≡', '不提示后台任务'],
@@ -46,7 +52,7 @@ const segmentExamples = {
   dotnet_version: ['.NET 8.0.1', '不显示 .NET 版本'],
   php_version: ['php 8.3.0', '不显示 PHP 版本'],
   java_version: ['java 21', '不显示 Java 版本'],
-  package: ['uniauth@1.2.0', '不显示 package.json 版本'],
+  package: ['project@1.0.0', '不显示 package.json 版本'],
   rbenv: ['ruby 3.3.0', '不显示 rbenv 版本'],
   rvm: ['ruby-3.3.0', '不显示 RVM 环境'],
   fvm: ['flutter 3.19.0', '不显示 Flutter FVM'],
@@ -65,7 +71,7 @@ const segmentExamples = {
   azure: ['work-account', '不显示 Azure account'],
   gcloud: ['my-gcp-project', '不显示 Google Cloud 项目'],
   google_app_cred: ['service-project', '不显示 Google 凭据项目'],
-  context: ['dsanying@MacBook', '本机普通用户通常不显示'],
+  context: ['user@machine', '本机普通用户通常不显示'],
   nix_shell: ['nix shell', '不显示 Nix shell'],
   chezmoi_shell: ['chezmoi', '不显示 chezmoi shell'],
   vi_mode: ['NORMAL', '不显示 Vi 模式'],
@@ -190,36 +196,55 @@ async function api(path, options) {
 async function load() {
   hideMessage();
   try {
-    state = await api('api/config');
+    state = await api(configApiPath());
     backendMode = 'real';
     saveButton.disabled = false;
     saveButton.textContent = '保存配置';
+    loadConfigButton.disabled = false;
+    configPathInput.disabled = false;
+    previewDirInput.disabled = false;
     document.body.dataset.mode = 'real';
     document.querySelector('#config-path').textContent = `真实模式：正在编辑 ${state.path}`;
-    previewNote.textContent = '真实模式：使用本机 zsh + Powerlevel10k 在伪终端里渲染。';
+    configPathInput.value = state.path;
+    configHelp.textContent = '已连接本机后端。可以自动加载默认配置，也可以输入其他配置路径后加载。';
+    previewNote.textContent = '真实模式：本机 zsh + Powerlevel10k 渲染。';
     settingsNote.innerHTML = '这些参数会影响整体显示方式。每一项下面都有例子，保存后执行 <code>source ~/.p10k.zsh</code> 生效。';
     if (!previewDirInput.value) {
       previewDirInput.value = state.path.replace(/\/\.p10k\.zsh$/, '');
     }
-    rawEl.textContent = await api('api/raw');
+    rawEl.textContent = await api(rawApiPath());
     await loadSnapshot();
     await loadRealRender();
     startSnapshotTimer();
   } catch {
     backendMode = 'preview';
     state = previewState();
-    saveButton.disabled = true;
-    saveButton.textContent = '静态预览不可保存';
+    saveButton.disabled = false;
+    saveButton.textContent = '下载配置';
+    loadConfigButton.disabled = true;
     document.body.dataset.mode = 'preview';
-    document.querySelector('#config-path').textContent = '静态预览模式：未连接本机后端，不会读取或保存 ~/.p10k.zsh';
-    previewDirInput.value = '~/Desktop/Github/UniAuth/uniauth-gf';
+    document.querySelector('#config-path').textContent = '未连接本机后端。可以选择本地配置文件进行预览，并下载修改后的配置。';
+    configPathInput.value = '~/.p10k.zsh';
+    configPathInput.disabled = true;
+    configHelp.textContent = '浏览器不能自动扫描本机文件；请选择 .p10k.zsh 文件。未选择时使用内置示例配置。';
+    previewDirInput.value = '~/Desktop/project';
     previewDirInput.disabled = true;
-    previewNote.textContent = '静态预览模式：适用于 GitHub Pages，只展示近似效果；本机运行 npm start 后自动切换为真实 zsh 渲染。';
-    settingsNote.textContent = '这些参数只影响当前页面预览。静态预览模式不会保存配置。';
-    rawEl.textContent = '静态预览模式不会读取本机 ~/.p10k.zsh。请在本机运行 npm start 使用真实编辑和保存功能。';
+    previewNote.textContent = '预览模式。选择配置文件后会按文件内容更新列表；保存时会下载修改后的文件。';
+    settingsNote.textContent = '这些参数会影响当前页面预览。选择配置文件后，可以下载修改后的配置。';
+    rawEl.textContent = '尚未选择配置文件。当前使用内置示例配置。';
     loadPreviewSnapshot();
   }
   render();
+}
+
+function configApiPath() {
+  const value = configPathInput.value.trim();
+  return value ? `api/config?path=${encodeURIComponent(value)}` : 'api/config';
+}
+
+function rawApiPath() {
+  const value = configPathInput.value.trim();
+  return value ? `api/raw?path=${encodeURIComponent(value)}` : 'api/raw';
 }
 
 async function loadSnapshot() {
@@ -248,7 +273,7 @@ function startSnapshotTimer() {
 
 function previewState() {
   return {
-    path: 'GitHub Pages 静态预览',
+    path: uploadedFileName || '示例配置',
     left: ['dir', 'vcs', 'newline'],
     right: ['status', 'command_execution_time', 'go_version', 'node_version', 'time'],
     settings: {
@@ -274,12 +299,12 @@ function loadPreviewSnapshot() {
   for (const [id] of fallbackCatalog) {
     values[id] = (segmentExamples[id] || ['', ''])[0];
   }
-  values.dir = '~/Desktop/Github/UniAuth/uniauth-gf';
-  values.vcs = 'on perf/i18n-zbw *1';
+  values.dir = '~/Desktop/project';
+  values.vcs = 'on main *1';
   values.status = '128 ✘';
   values.command_execution_time = 'took 8s';
-  values.go_version = 'go1.26.1';
-  values.node_version = 'v22.11.0';
+  values.go_version = 'go1.22.0';
+  values.node_version = 'v22.0.0';
   values.time = `at ${now.toLocaleTimeString('zh-CN', { hour12: false })}`;
   snapshot = {
     dir: previewDirInput.value,
@@ -297,6 +322,7 @@ async function loadRealRender() {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      configPath: configPathInput.value.trim(),
       left: state.left,
       right: state.right,
       settings: state.settings,
@@ -461,6 +487,133 @@ function addOption(select, value) {
   select.append(option);
 }
 
+function stateFromConfigText(text, name) {
+  const left = parseArrayText(text, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS')
+    .filter((item) => item.enabled)
+    .map((item) => item.id);
+  const right = parseArrayText(text, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS')
+    .filter((item) => item.enabled)
+    .map((item) => item.id);
+  const settings = Object.fromEntries(
+    fallbackSettingsCatalog.map(([settingName]) => [settingName, parseScalarText(text, settingName)])
+  );
+  return {
+    path: name,
+    left: left.length ? left : ['dir', 'vcs', 'newline'],
+    right: right.length ? right : ['status', 'time'],
+    settings,
+    catalog: fallbackCatalog,
+    settingsCatalog: fallbackSettingsCatalog,
+  };
+}
+
+function parseArrayText(text, name) {
+  const start = text.match(new RegExp(`typeset -g ${name}=\\(`));
+  if (!start) return [];
+  const startIndex = start.index + start[0].length;
+  const endIndex = text.indexOf('\n  )', startIndex);
+  if (endIndex === -1) return [];
+  return text
+    .slice(startIndex, endIndex)
+    .split('\n')
+    .map((line) => line.match(/^\s*(#\s*)?([a-zA-Z0-9_]+)\s*(?:#\s*(.*))?$/))
+    .filter(Boolean)
+    .map((match) => ({
+      id: match[2],
+      enabled: !match[1],
+      comment: match[3] || '',
+    }));
+}
+
+function parseScalarText(text, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = text.match(new RegExp(`^\\s*typeset -g ${escaped}=([^\\n]*)`, 'm'));
+  if (!match) return '';
+  return match[1].trim().replace(/^'(.*)'$/, '$1');
+}
+
+function buildConfigText(input, source) {
+  let next = replaceArrayText(source, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS', input.left);
+  next = replaceArrayText(next, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS', input.right);
+  for (const [name, type] of fallbackSettingsCatalog) {
+    if (Object.prototype.hasOwnProperty.call(input.settings || {}, name)) {
+      next = replaceScalarText(next, name, type, input.settings[name]);
+    }
+  }
+  return next;
+}
+
+function replaceArrayText(text, name, selected) {
+  const rendered = renderArrayText(name, selected);
+  const pattern = new RegExp(`typeset -g ${name}=\\([\\s\\S]*?\\n  \\)`);
+  if (pattern.test(text)) return text.replace(pattern, rendered);
+  return `${text.trimEnd()}\n\n  ${rendered}\n`;
+}
+
+function renderArrayText(name, selected) {
+  const selectedSet = new Set(selected);
+  const selectedLines = selected.map((id) => `    ${id.padEnd(24)}# ${labelForSegment(id)}`);
+  const disabledLines = fallbackCatalog
+    .map(([id]) => id)
+    .filter((id) => !selectedSet.has(id))
+    .map((id) => `    # ${id.padEnd(22)}# ${labelForSegment(id)}`);
+  return [
+    `typeset -g ${name}=(`,
+    ...selectedLines,
+    ...disabledLines,
+    '  )',
+  ].join('\n');
+}
+
+function labelForSegment(id) {
+  const found = fallbackCatalog.find(([segment]) => segment === id);
+  return found ? found[1] : id;
+}
+
+function replaceScalarText(text, name, type, value) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^(\\s*typeset -g ${escaped}=).*`, 'm');
+  const replacement = `$1${normalizeValueText(type, value)}`;
+  if (pattern.test(text)) return text.replace(pattern, replacement);
+  return `${text.trimEnd()}\n  typeset -g ${name}=${normalizeValueText(type, value)}\n`;
+}
+
+function normalizeValueText(type, value) {
+  if (type === 'boolean') return value === true || value === 'true' ? 'true' : 'false';
+  if (type === 'number') return String(Number(value || 0));
+  if (type === 'raw') return String(value || '');
+  return `'${String(value || '').replace(/'/g, "'\\''")}'`;
+}
+
+function fallbackConfigText() {
+  return [
+    '# Generated by Powerlevel10k Visual Editor preview mode.',
+    'typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(',
+    '    dir                     # 当前目录',
+    '    vcs                     # Git 状态',
+    '    newline                 # 换到下一行',
+    '  )',
+    'typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(',
+    '    status                  # 命令状态',
+    '    command_execution_time  # 命令耗时',
+    '    go_version              # Go 版本',
+    '    node_version            # Node 版本',
+    '    time                    # 当前时间',
+    '  )',
+    "typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true",
+    "typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR='·'",
+    'typeset -g POWERLEVEL9K_DIR_MAX_LENGTH=80',
+    'typeset -g POWERLEVEL9K_DIR_MIN_COMMAND_COLUMNS=40',
+    'typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD=3',
+    "typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_PREFIX='took '",
+    "typeset -g POWERLEVEL9K_TIME_FORMAT='%D{%H:%M:%S}'",
+    "typeset -g POWERLEVEL9K_TIME_PREFIX='at '",
+    'typeset -g POWERLEVEL9K_TRANSIENT_PROMPT=off',
+    'typeset -g POWERLEVEL9K_INSTANT_PROMPT=verbose',
+    '',
+  ].join('\n');
+}
+
 function renderPreview() {
   const leftBeforeNewline = itemsBeforeNewline(state.left);
   const rightBeforeNewline = itemsBeforeNewline(state.right);
@@ -602,22 +755,43 @@ function escapeHtml(text) {
 async function save() {
   hideMessage();
   if (backendMode !== 'real') {
-    showMessage('当前是静态预览模式，无法保存。请在本机运行 npm start 后使用真实模式。', true);
+    downloadConfig();
+    showMessage('已生成修改后的配置文件下载。浏览器不能直接覆盖本机 ~/.p10k.zsh。');
     return;
   }
   const result = await api('api/config', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      configPath: configPathInput.value.trim(),
       left: state.left,
       right: state.right,
       settings: state.settings,
     }),
   });
   state = result.config;
-  rawEl.textContent = await api('/api/raw');
+  configPathInput.value = state.path;
+  rawEl.textContent = await api(rawApiPath());
   render();
   showMessage(`已保存。原文件备份到：${result.backupPath}`);
+}
+
+function downloadConfig() {
+  const source = uploadedConfigText || fallbackConfigText();
+  const next = buildConfigText({
+    left: state.left,
+    right: state.right,
+    settings: state.settings,
+  }, source);
+  const blob = new Blob([next], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = uploadedFileName || '.p10k.zsh';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 document.querySelector('#reload').addEventListener('click', () => {
@@ -626,6 +800,44 @@ document.querySelector('#reload').addEventListener('click', () => {
 
 document.querySelector('#save').addEventListener('click', () => {
   save().catch((err) => showMessage(err.message, true));
+});
+
+loadConfigButton.addEventListener('click', () => {
+  if (backendMode !== 'real') return;
+  hideMessage();
+  api(configApiPath())
+    .then(async (config) => {
+      state = config;
+      configPathInput.value = state.path;
+      rawEl.textContent = await api(rawApiPath());
+      await loadRealRender();
+      render();
+      showMessage(`已加载配置：${state.path}`);
+    })
+    .catch((err) => showMessage(`无法加载配置文件：${err.message}`, true));
+});
+
+configFileInput.addEventListener('change', () => {
+  const file = configFileInput.files && configFileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    uploadedConfigText = String(reader.result || '');
+    uploadedFileName = file.name || '.p10k.zsh';
+    if (backendMode !== 'real') {
+      state = stateFromConfigText(uploadedConfigText, uploadedFileName);
+      rawEl.textContent = uploadedConfigText;
+      document.querySelector('#config-path').textContent = `已选择配置文件：${uploadedFileName}`;
+      configHelp.textContent = '已从你选择的文件读取配置。保存会下载修改后的文件。';
+      loadPreviewSnapshot();
+      render();
+      showMessage(`已读取配置文件：${uploadedFileName}`);
+      return;
+    }
+    showMessage('已选择文件。当前是真实模式，如需直接写回某个路径，请在“配置路径”里填写路径后加载。');
+  };
+  reader.onerror = () => showMessage('读取配置文件失败。', true);
+  reader.readAsText(file);
 });
 
 previewDirInput.addEventListener('change', () => {

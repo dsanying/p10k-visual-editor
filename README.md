@@ -19,6 +19,13 @@
 - GitHub Pages 指向 `docs/`。
 - 用户需要真实编辑时，clone 仓库后在本机运行 `npm start`。
 
+## `public/` 和 `docs/` 的区别
+
+- `public/`：本机 Node 服务使用的前端文件。运行 `npm start` 后会从这里提供页面，并连接本机 API 实现真实读取、真实渲染和保存。
+- `docs/`：GitHub Pages 使用的静态文件。它和 `public/` 保持同步，但没有本机 API，只能自动进入预览模式。
+
+两者的界面代码应保持一致；改完 `public/` 后需要同步到 `docs/` 再发布 Pages。
+
 ## 环境要求
 
 - macOS 或类 Unix 环境
@@ -82,7 +89,7 @@ http://127.0.0.1:48731
 页面会自动检测运行模式：
 
 - 本机 `npm start` 打开：真实模式，可读取、预览并保存 `~/.p10k.zsh`。
-- GitHub Pages 打开：静态预览模式，只能体验界面和近似预览。
+- GitHub Pages 打开：预览模式，可手动选择 `.p10k.zsh` 文件并下载修改后的配置。
 
 ## 行为
 
