@@ -10,7 +10,12 @@ const childProcess = require('child_process');
 const PORT = Number(process.env.PORT || 48731);
 const HOST = '127.0.0.1';
 const DEFAULT_CONFIG_PATH = process.env.P10K_CONFIG || path.join(os.homedir(), '.p10k.zsh');
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const STATIC_FILES = new Map([
+  ['/', 'index.html'],
+  ['/index.html', 'index.html'],
+  ['/app.js', 'app.js'],
+  ['/style.css', 'style.css'],
+]);
 
 const segmentCatalog = [
   ['newline', '换到下一行', '让后面的内容显示到下一行'],
@@ -409,13 +414,14 @@ function saveConfig(input) {
 }
 
 function serveStatic(req, res) {
-  const urlPath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url);
-  const filePath = path.join(PUBLIC_DIR, path.normalize(urlPath));
-  if (!filePath.startsWith(PUBLIC_DIR)) {
-    res.writeHead(403);
-    res.end('Forbidden');
+  const requestPath = decodeURIComponent(new URL(req.url, `http://${HOST}:${PORT}`).pathname);
+  const staticFile = STATIC_FILES.get(requestPath);
+  if (!staticFile) {
+    res.writeHead(404);
+    res.end('Not found');
     return;
   }
+  const filePath = path.join(__dirname, staticFile);
   fs.readFile(filePath, (err, data) => {
     if (err) {
       res.writeHead(404);

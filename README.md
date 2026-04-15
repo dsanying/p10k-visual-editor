@@ -16,15 +16,14 @@
 部署方式：
 
 - GitHub 仓库托管完整源码。
-- GitHub Pages 指向 `docs/`。
+- GitHub Pages 指向仓库根目录 `/`。
 - 用户需要真实编辑时，clone 仓库后在本机运行 `npm start`。
 
-## `public/` 和 `docs/` 的区别
+## 文件结构
 
-- `public/`：本机 Node 服务使用的前端文件。运行 `npm start` 后会从这里提供页面，并连接本机 API 实现真实读取、真实渲染和保存。
-- `docs/`：GitHub Pages 使用的静态文件。它和 `public/` 保持同步，但没有本机 API，只能自动进入预览模式。
-
-两者的界面代码应保持一致；改完 `public/` 后需要同步到 `docs/` 再发布 Pages。
+- `index.html`、`app.js`、`style.css`：本机服务和 GitHub Pages 共用的前端页面。
+- `server.js`：本机 Node 后端，提供配置读取、保存和 zsh 真实渲染 API。
+- `package.json`：本地启动和检查脚本。
 
 ## 环境要求
 
