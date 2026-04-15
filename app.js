@@ -359,10 +359,10 @@ function render() {
 function ensureUiOrder(side) {
   const key = `${side}Order`;
   if (state[key]) return;
-  const enabled = new Set(state[side]);
+  const catalogIds = state.catalog.map(([id]) => id);
   state[key] = [
-    ...state[side],
-    ...state.catalog.map(([id]) => id).filter((id) => !enabled.has(id)),
+    ...catalogIds,
+    ...state[side].filter((id) => !catalogIds.includes(id)),
   ];
 }
 
