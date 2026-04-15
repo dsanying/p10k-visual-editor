@@ -1,0 +1,24 @@
+{
+  "name": "p10k-visual-editor",
+  "version": "0.1.0",
+  "description": "Local visual editor for Powerlevel10k configuration with real zsh rendering preview.",
+  "private": false,
+  "type": "commonjs",
+  "bin": {
+    "p10k-visual-editor": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js"
+  },
+  "keywords": [
+    "powerlevel10k",
+    "zsh",
+    "oh-my-zsh",
+    "prompt",
+    "editor"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

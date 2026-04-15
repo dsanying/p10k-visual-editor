@@ -1,0 +1,473 @@
+#!/usr/bin/env node
+'use strict';
+
+const fs = require('fs');
+const http = require('http');
+const path = require('path');
+const os = require('os');
+const childProcess = require('child_process');
+
+const PORT = Number(process.env.PORT || 48731);
+const HOST = '127.0.0.1';
+const CONFIG_PATH = process.env.P10K_CONFIG || path.join(os.homedir(), '.p10k.zsh');
+const PUBLIC_DIR = path.join(__dirname, 'public');
+
+const segmentCatalog = [
+  ['newline', '换到下一行', '让后面的内容显示到下一行'],
+  ['os_icon', '系统图标', '显示操作系统图标'],
+  ['dir', '当前目录', '显示当前所在目录'],
+  ['vcs', 'Git 状态', '显示分支、变更、ahead/behind'],
+  ['prompt_char', '输入符号', '显示 ❯ 等输入提示符'],
+  ['status', '命令状态', '显示上一条命令成功或失败'],
+  ['command_execution_time', '命令耗时', '超过阈值后显示上一条命令耗时'],
+  ['background_jobs', '后台任务', '显示是否有后台任务'],
+  ['direnv', 'direnv', '显示 direnv 状态'],
+  ['asdf', 'asdf', '显示 asdf 当前版本'],
+  ['virtualenv', 'Python venv', '显示 Python 虚拟环境'],
+  ['anaconda', 'Conda', '显示 Conda 环境'],
+  ['pyenv', 'pyenv', '显示 pyenv 版本'],
+  ['goenv', 'goenv', '显示 goenv 版本'],
+  ['nodenv', 'nodenv', '显示 nodenv 版本'],
+  ['nvm', 'nvm', '显示 nvm Node 版本'],
+  ['nodeenv', 'nodeenv', '显示 nodeenv 环境'],
+  ['node_version', 'Node 版本', '显示 node 版本'],
+  ['go_version', 'Go 版本', '显示 Go 版本'],
+  ['rust_version', 'Rust 版本', '显示 rustc 版本'],
+  ['dotnet_version', '.NET 版本', '显示 dotnet 版本'],
+  ['php_version', 'PHP 版本', '显示 PHP 版本'],
+  ['java_version', 'Java 版本', '显示 Java 版本'],
+  ['package', 'package.json', '显示 package.json 的 name@version'],
+  ['rbenv', 'rbenv', '显示 rbenv Ruby 版本'],
+  ['rvm', 'RVM', '显示 RVM Ruby 版本'],
+  ['fvm', 'Flutter FVM', '显示 FVM 版本'],
+  ['luaenv', 'luaenv', '显示 Lua 版本'],
+  ['jenv', 'jenv', '显示 Java 环境'],
+  ['plenv', 'plenv', '显示 Perl 环境'],
+  ['perlbrew', 'perlbrew', '显示 perlbrew 环境'],
+  ['phpenv', 'phpenv', '显示 phpenv 版本'],
+  ['scalaenv', 'scalaenv', '显示 Scala 环境'],
+  ['haskell_stack', 'Haskell Stack', '显示 Stack 环境'],
+  ['kubecontext', 'Kubernetes', '显示 Kubernetes context'],
+  ['terraform', 'Terraform', '显示 Terraform workspace'],
+  ['terraform_version', 'Terraform 版本', '显示 Terraform 版本'],
+  ['aws', 'AWS', '显示 AWS profile/region'],
+  ['aws_eb_env', 'Elastic Beanstalk', '显示 EB 环境'],
+  ['azure', 'Azure', '显示 Azure account'],
+  ['gcloud', 'GCloud', '显示 Google Cloud 项目'],
+  ['google_app_cred', 'Google 凭据', '显示应用凭据项目'],
+  ['context', '用户/主机', '显示 user@host'],
+  ['nix_shell', 'Nix Shell', '显示 Nix shell'],
+  ['chezmoi_shell', 'chezmoi', '显示 chezmoi shell'],
+  ['vi_mode', 'Vi 模式', '显示 NORMAL/VISUAL 等模式'],
+  ['todo', 'todo.txt', '显示 todo 数量'],
+  ['timewarrior', 'Timewarrior', '显示计时状态'],
+  ['taskwarrior', 'Taskwarrior', '显示任务数量'],
+  ['per_directory_history', '目录历史', '显示 per-directory-history 状态'],
+  ['cpu_arch', 'CPU 架构', '显示 CPU 架构'],
+  ['time', '当前时间', '显示当前时间'],
+  ['ip', '内网 IP', '显示 IP 和带宽'],
+  ['public_ip', '公网 IP', '显示公网 IP'],
+  ['proxy', '代理', '显示系统代理'],
+  ['battery', '电池', '显示电池状态'],
+  ['wifi', 'Wi-Fi', '显示 Wi-Fi 状态'],
+];
+
+const settingsCatalog = [
+  ['POWERLEVEL9K_PROMPT_ADD_NEWLINE', 'boolean', 'Prompt 前空一行'],
+  ['POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR', 'string', '第一行填充字符'],
+  ['POWERLEVEL9K_DIR_MAX_LENGTH', 'number', '目录最大长度'],
+  ['POWERLEVEL9K_DIR_MIN_COMMAND_COLUMNS', 'number', '命令区最小列数'],
+  ['POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD', 'number', '耗时显示阈值（秒）'],
+  ['POWERLEVEL9K_COMMAND_EXECUTION_TIME_PREFIX', 'string', '耗时前缀'],
+  ['POWERLEVEL9K_TIME_FORMAT', 'string', '时间格式'],
+  ['POWERLEVEL9K_TIME_PREFIX', 'string', '时间前缀'],
+  ['POWERLEVEL9K_TRANSIENT_PROMPT', 'raw', 'Transient prompt'],
+  ['POWERLEVEL9K_INSTANT_PROMPT', 'raw', 'Instant prompt'],
+];
+
+function readConfig() {
+  return fs.readFileSync(CONFIG_PATH, 'utf8');
+}
+
+function writeJson(res, status, data) {
+  const body = JSON.stringify(data, null, 2);
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 1024 * 1024) {
+        req.destroy();
+        reject(new Error('Request body is too large'));
+      }
+    });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+function parseArray(text, name) {
+  const start = text.match(new RegExp(`typeset -g ${name}=\\(`));
+  if (!start) return [];
+  const startIndex = start.index + start[0].length;
+  const endIndex = text.indexOf('\n  )', startIndex);
+  if (endIndex === -1) return [];
+  return text
+    .slice(startIndex, endIndex)
+    .split('\n')
+    .map((line) => line.match(/^\s*(#\s*)?([a-zA-Z0-9_]+)\s*(?:#\s*(.*))?$/))
+    .filter(Boolean)
+    .map((match) => ({
+      id: match[2],
+      enabled: !match[1],
+      comment: match[3] || '',
+    }));
+}
+
+function parseScalar(text, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = text.match(new RegExp(`^\\s*typeset -g ${escaped}=([^\\n]*)`, 'm'));
+  if (!match) return '';
+  return match[1].trim().replace(/^'(.*)'$/, '$1');
+}
+
+function parseConfig() {
+  const text = readConfig();
+  const left = parseArray(text, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS')
+    .filter((item) => item.enabled)
+    .map((item) => item.id);
+  const right = parseArray(text, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS')
+    .filter((item) => item.enabled)
+    .map((item) => item.id);
+  const settings = Object.fromEntries(
+    settingsCatalog.map(([name]) => [name, parseScalar(text, name)])
+  );
+  return { path: CONFIG_PATH, left, right, settings, catalog: segmentCatalog, settingsCatalog };
+}
+
+function runCommand(command, args, cwd) {
+  try {
+    return childProcess.execFileSync(command, args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1200,
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+function displayPath(dir) {
+  const home = os.homedir();
+  if (dir === home) return '~';
+  if (dir.startsWith(`${home}${path.sep}`)) return `~/${path.relative(home, dir)}`;
+  return dir;
+}
+
+function gitSnapshot(dir) {
+  const top = runCommand('git', ['-C', dir, 'rev-parse', '--show-toplevel'], dir);
+  if (!top) return '';
+  const branch = runCommand('git', ['-C', dir, 'branch', '--show-current'], dir) ||
+    runCommand('git', ['-C', dir, 'rev-parse', '--short', 'HEAD'], dir);
+  const porcelain = runCommand('git', ['-C', dir, 'status', '--porcelain=v1', '--branch'], dir);
+  const lines = porcelain.split('\n').filter(Boolean);
+  const header = lines[0] || '';
+  const changed = Math.max(lines.length - (header.startsWith('## ') ? 1 : 0), 0);
+  const ahead = (header.match(/ahead (\d+)/) || [])[1];
+  const behind = (header.match(/behind (\d+)/) || [])[1];
+  const parts = [branch || 'HEAD'];
+  if (changed) parts.push(`*${changed}`);
+  if (ahead) parts.push(`⇡${ahead}`);
+  if (behind) parts.push(`⇣${behind}`);
+  return `on ${parts.join(' ')}`;
+}
+
+function packageSnapshot(dir) {
+  const file = path.join(dir, 'package.json');
+  try {
+    const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (pkg.name && pkg.version) return `${pkg.name}@${pkg.version}`;
+    return pkg.name || '';
+  } catch {
+    return '';
+  }
+}
+
+function snapshotFor(dirInput) {
+  const dir = path.resolve(dirInput || process.cwd());
+  const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+  const safeDir = exists ? dir : process.cwd();
+  const now = new Date();
+  const values = {
+    newline: '',
+    os_icon: process.platform === 'darwin' ? '' : os.type(),
+    dir: displayPath(safeDir),
+    vcs: gitSnapshot(safeDir),
+    prompt_char: '❯',
+    status: '网页无法读取上一条命令状态',
+    command_execution_time: '网页无法读取上一条命令耗时',
+    background_jobs: '',
+    direnv: process.env.DIRENV_DIR ? 'direnv' : '',
+    asdf: '',
+    virtualenv: process.env.VIRTUAL_ENV ? path.basename(process.env.VIRTUAL_ENV) : '',
+    anaconda: process.env.CONDA_DEFAULT_ENV || '',
+    pyenv: runCommand('pyenv', ['version-name'], safeDir),
+    goenv: runCommand('goenv', ['version-name'], safeDir),
+    nodenv: runCommand('nodenv', ['version-name'], safeDir),
+    nvm: '',
+    nodeenv: process.env.NODE_VIRTUAL_ENV ? path.basename(process.env.NODE_VIRTUAL_ENV) : '',
+    node_version: runCommand('node', ['--version'], safeDir),
+    go_version: runCommand('go', ['version'], safeDir).replace(/^go version /, '').split(' ').slice(0, 1).join(' '),
+    rust_version: runCommand('rustc', ['--version'], safeDir).split(' ').slice(0, 2).join(' '),
+    dotnet_version: runCommand('dotnet', ['--version'], safeDir),
+    php_version: runCommand('php', ['-r', 'echo PHP_VERSION;'], safeDir),
+    java_version: runCommand('java', ['-version'], safeDir).split('\n')[0],
+    package: packageSnapshot(safeDir),
+    rbenv: runCommand('rbenv', ['version-name'], safeDir),
+    rvm: process.env.rvm_ruby_string || '',
+    fvm: runCommand('fvm', ['--version'], safeDir),
+    luaenv: runCommand('luaenv', ['version-name'], safeDir),
+    jenv: runCommand('jenv', ['version-name'], safeDir),
+    plenv: runCommand('plenv', ['version-name'], safeDir),
+    perlbrew: process.env.PERLBREW_PERL || '',
+    phpenv: runCommand('phpenv', ['version-name'], safeDir),
+    scalaenv: runCommand('scalaenv', ['version-name'], safeDir),
+    haskell_stack: runCommand('stack', ['--resolver'], safeDir),
+    kubecontext: runCommand('kubectl', ['config', 'current-context'], safeDir),
+    terraform: runCommand('terraform', ['workspace', 'show'], safeDir),
+    terraform_version: runCommand('terraform', ['version', '-json'], safeDir).match(/"terraform_version"\s*:\s*"([^"]+)"/)?.[1] || '',
+    aws: [process.env.AWS_PROFILE, process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION].filter(Boolean).join(' '),
+    aws_eb_env: '',
+    azure: '',
+    gcloud: runCommand('gcloud', ['config', 'get-value', 'project'], safeDir),
+    google_app_cred: process.env.GOOGLE_APPLICATION_CREDENTIALS ? path.basename(process.env.GOOGLE_APPLICATION_CREDENTIALS) : '',
+    context: `${os.userInfo().username}@${os.hostname().split('.')[0]}`,
+    nix_shell: process.env.IN_NIX_SHELL ? 'nix shell' : '',
+    chezmoi_shell: process.env.CHEZMOI ? 'chezmoi' : '',
+    vi_mode: '',
+    todo: '',
+    timewarrior: '',
+    taskwarrior: '',
+    per_directory_history: '',
+    cpu_arch: os.arch(),
+    time: `at ${now.toLocaleTimeString('zh-CN', { hour12: false })}`,
+    ip: '',
+    public_ip: '',
+    proxy: process.env.HTTPS_PROXY || process.env.HTTP_PROXY ? 'proxy' : '',
+    battery: '',
+    wifi: '',
+  };
+  return { dir: safeDir, requestedDir: dir, exists, values };
+}
+
+function quoteForZsh(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function stripScriptNoise(output) {
+  return output
+    .replace(/^\x04\b\b/, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trimEnd();
+}
+
+function renderPrompt(dirInput, columnsInput, configOverridePath) {
+  const dir = path.resolve(dirInput || process.cwd());
+  const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+  const safeDir = exists ? dir : process.cwd();
+  const columns = Math.max(60, Math.min(240, Number(columnsInput || 120)));
+  const scriptBody = [
+    `cd -- ${quoteForZsh(safeDir)} || exit 1`,
+    configOverridePath ? `source ${quoteForZsh(configOverridePath)}` : '',
+    'for f in $precmd_functions; do $f 2>/dev/null || true; done',
+    'print -rP -- "${(e)PROMPT}"',
+  ].filter(Boolean).join('; ');
+  try {
+    const ansi = childProcess.execFileSync('script', ['-q', '/dev/null', 'zsh', '-ic', scriptBody], {
+      cwd: safeDir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLUMNS: String(columns),
+        POWERLEVEL9K_INSTANT_PROMPT: 'off',
+      },
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000,
+    });
+    return { dir: safeDir, requestedDir: dir, exists, columns, ansi: stripScriptNoise(ansi), error: '' };
+  } catch (err) {
+    return {
+      dir: safeDir,
+      requestedDir: dir,
+      exists,
+      columns,
+      ansi: '',
+      error: err.message || 'zsh render failed',
+    };
+  }
+}
+
+function buildConfig(input, original) {
+  if (!Array.isArray(input.left) || !Array.isArray(input.right)) {
+    throw new Error('left and right must be arrays');
+  }
+  const valid = new Set(segmentCatalog.map(([id]) => id));
+  const left = input.left.filter((id) => valid.has(id));
+  const right = input.right.filter((id) => valid.has(id));
+  let next = replaceArray(original, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS', left);
+  next = replaceArray(next, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS', right);
+  for (const [name, type] of settingsCatalog) {
+    if (Object.prototype.hasOwnProperty.call(input.settings || {}, name)) {
+      next = replaceScalar(next, name, type, input.settings[name]);
+    }
+  }
+  return next;
+}
+
+function renderPromptWithConfig(dirInput, columnsInput, input) {
+  const tempPath = path.join(os.tmpdir(), `p10k-editor-preview-${process.pid}-${Date.now()}.zsh`);
+  fs.writeFileSync(tempPath, buildConfig(input, readConfig()));
+  try {
+    return renderPrompt(dirInput, columnsInput, tempPath);
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
+}
+
+function quoteZsh(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function renderArray(name, selected) {
+  const selectedSet = new Set(selected);
+  const selectedLines = selected.map((id) => `    ${id.padEnd(24)}# ${labelFor(id)}`);
+  const disabledLines = segmentCatalog
+    .map(([id]) => id)
+    .filter((id) => !selectedSet.has(id))
+    .map((id) => `    # ${id.padEnd(22)}# ${labelFor(id)}`);
+  return [
+    `typeset -g ${name}=(`,
+    ...selectedLines,
+    ...disabledLines,
+    '  )',
+  ].join('\n');
+}
+
+function labelFor(id) {
+  const found = segmentCatalog.find(([segment]) => segment === id);
+  return found ? found[1] : id;
+}
+
+function replaceArray(text, name, selected) {
+  const pattern = new RegExp(`typeset -g ${name}=\\([\\s\\S]*?\\n  \\)`);
+  if (!pattern.test(text)) throw new Error(`Cannot find ${name}`);
+  return text.replace(pattern, renderArray(name, selected));
+}
+
+function normalizeValue(type, value) {
+  if (type === 'boolean') return value === true || value === 'true' ? 'true' : 'false';
+  if (type === 'number') return String(Number(value || 0));
+  if (type === 'raw') return String(value || '');
+  return quoteZsh(value || '');
+}
+
+function replaceScalar(text, name, type, value) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^(\\s*typeset -g ${escaped}=).*`, 'm');
+  const replacement = `$1${normalizeValue(type, value)}`;
+  if (!pattern.test(text)) return `${text}\n  typeset -g ${name}=${normalizeValue(type, value)}\n`;
+  return text.replace(pattern, replacement);
+}
+
+function saveConfig(input) {
+  const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '');
+  const backupPath = `${CONFIG_PATH}.p10k-editor.${timestamp}.bak`;
+  const original = readConfig();
+  fs.copyFileSync(CONFIG_PATH, backupPath);
+  const next = buildConfig(input, original);
+  fs.writeFileSync(CONFIG_PATH, next);
+  return { backupPath };
+}
+
+function serveStatic(req, res) {
+  const urlPath = req.url === '/' ? '/index.html' : decodeURIComponent(req.url);
+  const filePath = path.join(PUBLIC_DIR, path.normalize(urlPath));
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    const ext = path.extname(filePath);
+    const type = ext === '.js' ? 'application/javascript' : ext === '.css' ? 'text/css' : 'text/html';
+    res.writeHead(200, { 'content-type': `${type}; charset=utf-8` });
+    res.end(data);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    if (req.method === 'GET' && req.url === '/api/config') {
+      writeJson(res, 200, parseConfig());
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/api/raw') {
+      const raw = readConfig();
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end(raw);
+      return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/snapshot')) {
+      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      writeJson(res, 200, snapshotFor(requestUrl.searchParams.get('dir')));
+      return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/render')) {
+      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      writeJson(res, 200, renderPrompt(
+        requestUrl.searchParams.get('dir'),
+        requestUrl.searchParams.get('columns')
+      ));
+      return;
+    }
+    if (req.method === 'POST' && req.url.startsWith('/api/render')) {
+      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      const body = await readBody(req);
+      writeJson(res, 200, renderPromptWithConfig(
+        requestUrl.searchParams.get('dir'),
+        requestUrl.searchParams.get('columns'),
+        JSON.parse(body)
+      ));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/api/config') {
+      const body = await readBody(req);
+      const result = saveConfig(JSON.parse(body));
+      writeJson(res, 200, { ok: true, ...result, config: parseConfig() });
+      return;
+    }
+    serveStatic(req, res);
+  } catch (err) {
+    writeJson(res, 500, { ok: false, error: err.message });
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`Powerlevel10k editor: http://${HOST}:${PORT}`);
+  console.log(`Editing: ${CONFIG_PATH}`);
+});

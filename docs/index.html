@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Powerlevel10k 配置编辑器</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <header class="topbar">
+        <div>
+          <h1>Powerlevel10k 配置编辑器</h1>
+          <p class="intro">勾选表示会显示在命令行里，取消勾选表示完全不显示。上移/下移会改变显示顺序。</p>
+          <p id="config-path">读取配置中...</p>
+        </div>
+        <div class="actions">
+          <button id="reload" type="button">重新读取</button>
+          <button id="save" type="button" class="primary">保存配置</button>
+        </div>
+      </header>
+
+      <section id="message" class="message" hidden></section>
+
+      <section class="preview-band">
+        <div class="preview-toolbar">
+          <div>
+            <div class="preview-title">zsh 真实渲染预览</div>
+            <p id="preview-note">正在检测运行模式...</p>
+          </div>
+          <label class="preview-dir">
+            预览目录
+            <input id="preview-dir" type="text" spellcheck="false">
+          </label>
+        </div>
+        <div class="prompt-preview">
+          <div id="real-prompt" class="real-prompt">读取中...</div>
+          <div class="prompt-row" id="preview-line-1">
+            <span class="frame" id="preview-left-frame">╭─</span>
+            <span id="left-preview" class="left-preview"></span>
+            <span class="fill">········································</span>
+            <span id="right-preview" class="right-preview"></span>
+            <span class="frame" id="preview-right-frame">─╮</span>
+          </div>
+          <div class="prompt-row" id="preview-line-2">
+            <span class="frame">╰─</span>
+            <span class="command">gf run main.go</span>
+            <span class="fill small">························</span>
+            <span class="frame">─╯</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="layout">
+        <div class="panel">
+          <h2>左侧显示</h2>
+          <p>适合放最重要的信息，比如当前目录、Git 分支、换行。</p>
+          <div id="left-list" class="segment-list"></div>
+        </div>
+
+        <div class="panel">
+          <h2>右侧显示</h2>
+          <p>适合放状态、运行耗时、语言环境、云服务、时间等辅助信息。</p>
+          <div id="right-list" class="segment-list"></div>
+        </div>
+      </section>
+
+      <section class="panel settings-panel">
+        <h2>常用参数</h2>
+        <p id="settings-note">这些参数会影响整体显示方式。每一项下面都有例子，保存后执行 <code>source ~/.p10k.zsh</code> 生效。</p>
+        <div id="settings" class="settings-grid"></div>
+      </section>
+
+      <section class="panel">
+        <details>
+          <summary>查看原始配置</summary>
+          <pre id="raw-config">读取中...</pre>
+        </details>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

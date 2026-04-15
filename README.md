@@ -1,0 +1,99 @@
+# Powerlevel10k Visual Editor
+
+本工具是一个本地 Web 编辑器，用来可视化编辑 `~/.p10k.zsh` 的常用配置，并通过本机 zsh + Powerlevel10k 在伪终端中真实渲染预览。
+
+## 运行模式
+
+本项目使用同一套前端自动切换两种模式：
+
+- 真实模式：本机运行 `npm start` 后，页面会连接 Node 后端，读取 `~/.p10k.zsh`，并调用本机 zsh + Powerlevel10k 真实渲染。
+- 静态预览模式：部署到 GitHub Pages 时没有后端，页面会自动降级为预览版。预览版可以勾选、排序和查看近似效果，但不能读取、保存或真实调用 zsh。
+
+## GitHub Pages
+
+可以部署到 GitHub Pages。Pages 会运行静态预览模式。
+
+部署方式：
+
+- GitHub 仓库托管完整源码。
+- GitHub Pages 指向 `docs/`。
+- 用户需要真实编辑时，clone 仓库后在本机运行 `npm start`。
+
+## 环境要求
+
+- macOS 或类 Unix 环境
+- Node.js 18+
+- zsh
+- Oh My Zsh
+- Powerlevel10k
+- macOS 上用于伪终端渲染的 `script` 命令
+
+## 快速安装
+
+### 1. 安装 Oh My Zsh
+
+```sh
+RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" --unattended
+```
+
+### 2. 安装 Powerlevel10k
+
+```sh
+git clone --depth=1 https://github.com/romkatv/powerlevel10k.git \
+  "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k"
+```
+
+### 3. 启用 Powerlevel10k
+
+编辑 `~/.zshrc`：
+
+```sh
+ZSH_THEME="powerlevel10k/powerlevel10k"
+```
+
+确保 `~/.zshrc` 中有下面这一行，用于加载 Powerlevel10k 配置：
+
+```sh
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+```
+
+### 4. 生成基础配置
+
+```sh
+exec zsh
+p10k configure
+```
+
+## 启动编辑器
+
+克隆本仓库后：
+
+```sh
+cd p10k-visual-editor
+npm start
+```
+
+默认地址：
+
+```text
+http://127.0.0.1:48731
+```
+
+页面会自动检测运行模式：
+
+- 本机 `npm start` 打开：真实模式，可读取、预览并保存 `~/.p10k.zsh`。
+- GitHub Pages 打开：静态预览模式，只能体验界面和近似预览。
+
+## 行为
+
+- 读取当前用户的 `~/.p10k.zsh`
+- 保存前自动备份原文件，备份名类似 `.p10k.zsh.p10k-editor.YYYYMMDDTHHMMSS.bak`
+- 可视化编辑左右 prompt 段、显示顺序和常用参数
+- 预览时会把当前界面上的未保存配置写入临时文件，并调用本机 zsh + Powerlevel10k 在伪终端中真实渲染
+- 保存后在终端执行 `source ~/.p10k.zsh` 或 `exec zsh` 生效
+
+## 开发检查
+
+```sh
+npm run check
+```
