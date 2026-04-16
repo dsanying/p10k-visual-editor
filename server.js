@@ -60,7 +60,16 @@ const segmentCatalog = [
   ['azure', 'Azure', '显示 Azure account'],
   ['gcloud', 'GCloud', '显示 Google Cloud 项目'],
   ['google_app_cred', 'Google 凭据', '显示应用凭据项目'],
+  ['toolbox', 'Toolbox 容器', '进入 Fedora Toolbox/容器开发环境时显示容器名'],
   ['context', '用户/主机', '显示 user@host'],
+  ['nordvpn', 'NordVPN', '显示 NordVPN 连接状态'],
+  ['ranger', 'ranger 文件管理器', '在 ranger 文件管理器子 shell 中显示层级'],
+  ['yazi', 'Yazi 文件管理器', '在 Yazi 文件管理器子 shell 中显示层级'],
+  ['nnn', 'nnn 文件管理器', '在 nnn 文件管理器子 shell 中显示层级'],
+  ['lf', 'lf 文件管理器', '在 lf 文件管理器子 shell 中显示层级'],
+  ['xplr', 'xplr 文件管理器', '在 xplr 文件管理器子 shell 中显示状态'],
+  ['vim_shell', 'Vim 子 shell', '在 Vim 内打开 shell 时显示提示'],
+  ['midnight_commander', 'Midnight Commander', '在 mc 文件管理器子 shell 中显示提示'],
   ['nix_shell', 'Nix Shell', '显示 Nix shell'],
   ['chezmoi_shell', 'chezmoi', '显示 chezmoi shell'],
   ['vi_mode', 'Vi 模式', '显示 NORMAL/VISUAL 等模式'],
@@ -181,7 +190,7 @@ function catalogWithConfigSegments(...groups) {
   for (const item of groups.flat()) {
     if (known.has(item.id)) continue;
     known.add(item.id);
-    catalog.push([item.id, item.comment || item.id, '当前配置文件中的 Powerlevel10k 段']);
+    catalog.push([item.id, item.comment || item.id, '这个段来自你的 .p10k.zsh，当前编辑器暂时没有内置中文说明']);
   }
   return catalog;
 }
@@ -283,7 +292,16 @@ function snapshotFor(dirInput) {
     azure: 'default-account',
     gcloud: runCommand('gcloud', ['config', 'get-value', 'project'], safeDir) || 'demo-project',
     google_app_cred: process.env.GOOGLE_APPLICATION_CREDENTIALS ? path.basename(process.env.GOOGLE_APPLICATION_CREDENTIALS) : 'service-account.json',
+    toolbox: process.env.P9K_TOOLBOX_NAME || 'toolbox',
     context: `${os.userInfo().username}@${os.hostname().split('.')[0]}`,
+    nordvpn: 'VPN',
+    ranger: process.env.RANGER_LEVEL || 'ranger 1',
+    yazi: process.env.YAZI_LEVEL || 'yazi 1',
+    nnn: process.env.NNNLVL || 'nnn 1',
+    lf: process.env.LF_LEVEL || 'lf 1',
+    xplr: process.env.XPLR_PID ? 'xplr' : 'xplr',
+    vim_shell: process.env.VIMRUNTIME ? 'vim shell' : 'vim shell',
+    midnight_commander: process.env.MC_TMPDIR ? 'mc' : 'mc',
     nix_shell: process.env.IN_NIX_SHELL ? 'nix shell' : 'nix shell',
     chezmoi_shell: process.env.CHEZMOI ? 'chezmoi' : 'chezmoi',
     vi_mode: 'NORMAL',
