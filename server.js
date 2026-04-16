@@ -368,7 +368,16 @@ function createInteractiveShell(input) {
   fs.writeFileSync(tempConfigPath, buildConfig(input, readConfig(configPath)));
   fs.writeFileSync(tempZshrcPath, [
     `[[ -f ${quoteZsh(path.join(os.homedir(), '.zshrc'))} ]] && source ${quoteZsh(path.join(os.homedir(), '.zshrc'))}`,
-    `source ${quoteZsh(tempConfigPath)}`,
+    'function _p10k_editor_reload_config() {',
+    `  source ${quoteZsh(tempConfigPath)} 2>/dev/null || return 1`,
+    '  if (( $+functions[_p9k_precmd_impl] )); then _p9k_precmd_impl 2>/dev/null || true; fi',
+    '  zle reset-prompt 2>/dev/null || true',
+    '}',
+    'TRAPUSR1() {',
+    '  _p10k_editor_reload_config',
+    '  return 0',
+    '}',
+    '_p10k_editor_reload_config',
     `cd -- ${quoteZsh(safeDir)}`,
     '',
   ].join('\n'));
@@ -385,7 +394,7 @@ function createInteractiveShell(input) {
       HOME: os.homedir(),
     },
   });
-  return { shell, tempDir };
+  return { shell, tempDir, tempConfigPath };
 }
 
 function cleanupInteractiveShell(session) {
@@ -395,6 +404,13 @@ function cleanupInteractiveShell(session) {
     if (!session.exited) session.shell.kill();
   } catch {}
   fs.rmSync(session.tempDir, { recursive: true, force: true });
+}
+
+function updateInteractiveShell(session, input) {
+  if (!session) throw new Error('交互 zsh 尚未启动');
+  const configPath = resolveConfigPath(input.configPath);
+  fs.writeFileSync(session.tempConfigPath, buildConfig(input, readConfig(configPath)));
+  process.kill(session.shell.pid, 'SIGUSR1');
 }
 
 function sendTerminalMessage(ws, payload) {
@@ -586,6 +602,11 @@ terminalServer.on('connection', (ws) => {
       }
       if (payload.type === 'data') {
         if (session) session.shell.write(String(payload.data || ''));
+        return;
+      }
+      if (payload.type === 'update') {
+        updateInteractiveShell(session, payload);
+        sendTerminalMessage(ws, { type: 'updated' });
         return;
       }
       if (payload.type === 'resize') {
