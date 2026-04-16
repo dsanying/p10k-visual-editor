@@ -176,6 +176,7 @@ function parseConfig(configPath = DEFAULT_CONFIG_PATH) {
   );
   return {
     path: configPath,
+    home: os.homedir(),
     left,
     right,
     settings,
@@ -543,6 +544,20 @@ function saveConfig(input) {
   return { backupPath };
 }
 
+function selectDirectory() {
+  if (process.platform !== 'darwin') {
+    throw new Error('当前系统暂不支持目录选择器，请手动输入目录路径。');
+  }
+  const script = 'POSIX path of (choose folder with prompt "选择 Powerlevel10k 预览目录")';
+  const output = childProcess.execFileSync('osascript', ['-e', script], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 120000,
+  }).trim();
+  if (!output) throw new Error('未选择目录');
+  return output.length > 1 ? output.replace(/\/$/, '') : output;
+}
+
 function serveStatic(req, res) {
   const requestPath = decodeURIComponent(new URL(req.url, `http://${HOST}:${PORT}`).pathname);
   const staticFile = STATIC_FILES.get(requestPath);
@@ -586,6 +601,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url.startsWith('/api/snapshot')) {
       const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
       writeJson(res, 200, snapshotFor(requestUrl.searchParams.get('dir')));
+      return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/select-dir')) {
+      writeJson(res, 200, { path: selectDirectory() });
       return;
     }
     if (req.method === 'GET' && req.url.startsWith('/api/render')) {

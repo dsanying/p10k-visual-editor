@@ -23,9 +23,9 @@ const configFileInput = document.querySelector('#config-file-input');
 const configHelp = document.querySelector('#config-help');
 const previewCommandInput = document.querySelector('#preview-command');
 const executeCommandButton = document.querySelector('#execute-command');
+const selectDirButton = document.querySelector('#select-dir');
 let snapshot = { values: {} };
 let realRender = { ansi: '', error: '' };
-let snapshotTimer = null;
 let renderTimer = null;
 let uploadedConfigText = '';
 let uploadedFileName = '.p10k.zsh';
@@ -222,6 +222,7 @@ async function load() {
     saveButton.disabled = false;
     saveButton.textContent = '保存配置';
     executeCommandButton.disabled = false;
+    selectDirButton.disabled = false;
     loadConfigButton.disabled = false;
     configPathInput.disabled = false;
     previewDirInput.disabled = false;
@@ -229,28 +230,28 @@ async function load() {
     document.querySelector('#config-path').textContent = `真实模式：正在编辑 ${state.path}`;
     configPathInput.value = state.path;
     configHelp.textContent = '已连接本机后端。可以自动加载默认配置，也可以输入其他配置路径后加载。';
-    previewNote.textContent = '真实模式：本机 zsh + Powerlevel10k 渲染。';
+    previewNote.textContent = '真实模式：本机 zsh + Powerlevel10k 渲染。目录不会自动刷新。';
     settingsNote.innerHTML = '这些参数会影响整体显示方式。每一项下面都有例子，保存后执行 <code>source ~/.p10k.zsh</code> 生效。';
     if (!previewDirInput.value) {
-      previewDirInput.value = state.path.replace(/\/\.p10k\.zsh$/, '');
+      previewDirInput.value = state.home || state.path.replace(/\/\.p10k\.zsh$/, '');
     }
     rawEl.textContent = await api(rawApiPath());
     await loadSnapshot();
     await loadRealRender();
-    startSnapshotTimer();
   } catch {
     backendMode = 'preview';
     state = previewState();
     saveButton.disabled = false;
     saveButton.textContent = '下载配置';
     executeCommandButton.disabled = true;
+    selectDirButton.disabled = true;
     loadConfigButton.disabled = true;
     document.body.dataset.mode = 'preview';
     document.querySelector('#config-path').textContent = '未连接本机后端。可以选择本地配置文件进行预览，并下载修改后的配置。';
     configPathInput.value = '~/.p10k.zsh';
     configPathInput.disabled = true;
     configHelp.textContent = '浏览器不能自动扫描本机文件；请选择 .p10k.zsh 文件。未选择时使用内置示例配置。';
-    previewDirInput.value = '~/Desktop/project';
+    previewDirInput.value = '~';
     previewDirInput.disabled = true;
     previewNote.textContent = '预览模式。选择配置文件后会按文件内容更新列表；保存时会下载修改后的文件。';
     settingsNote.textContent = '这些参数会影响当前页面预览。选择配置文件后，可以下载修改后的配置。';
@@ -280,20 +281,6 @@ async function loadSnapshot() {
   previewNote.textContent = snapshot.exists
     ? `正在读取：${snapshot.dir}`
     : `目录不存在，已回退到：${snapshot.dir}`;
-}
-
-function startSnapshotTimer() {
-  if (snapshotTimer) clearInterval(snapshotTimer);
-  snapshotTimer = setInterval(() => {
-    if (backendMode === 'real') {
-      const tasks = [loadSnapshot()];
-      if (!showingExecution) tasks.push(loadRealRender());
-      Promise.all(tasks).then(renderPreview).catch(() => {});
-    } else {
-      loadPreviewSnapshot();
-      renderPreview();
-    }
-  }, 2000);
 }
 
 function previewState() {
@@ -883,6 +870,28 @@ async function executePreviewCommand() {
   }
 }
 
+async function selectPreviewDirectory() {
+  hideMessage();
+  if (backendMode !== 'real') {
+    showMessage('只有本机真实模式可以选择目录。', true);
+    return;
+  }
+  selectDirButton.disabled = true;
+  selectDirButton.textContent = '选择中...';
+  try {
+    const result = await api('api/select-dir');
+    previewDirInput.value = result.path;
+    await Promise.all([loadSnapshot(), loadRealRender()]);
+    renderPreview();
+    showMessage(`已选择预览目录：${result.path}`);
+  } catch (err) {
+    showMessage(`选择目录失败：${err.message}`, true);
+  } finally {
+    selectDirButton.disabled = false;
+    selectDirButton.textContent = '选择目录';
+  }
+}
+
 function downloadConfig() {
   const source = uploadedConfigText || fallbackConfigText();
   const next = buildConfigText({
@@ -911,6 +920,10 @@ document.querySelector('#save').addEventListener('click', () => {
 
 executeCommandButton.addEventListener('click', () => {
   executePreviewCommand().catch((err) => showMessage(err.message, true));
+});
+
+selectDirButton.addEventListener('click', () => {
+  selectPreviewDirectory().catch((err) => showMessage(err.message, true));
 });
 
 previewCommandInput.addEventListener('input', () => {
