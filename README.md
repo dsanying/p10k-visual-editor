@@ -23,6 +23,7 @@
 
 - `index.html`、`app.js`、`style.css`：本机服务和 GitHub Pages 共用的前端页面。
 - `server.js`：本机 Node 后端，提供配置读取、保存和 zsh 真实渲染 API。
+- `start.command`：macOS 双击启动文件，会启动本机服务并打开浏览器。
 - `package.json`：本地启动和检查脚本。
 
 ## 环境要求
@@ -71,6 +72,8 @@ p10k configure
 ```
 
 ## 启动编辑器
+
+macOS 可以直接双击项目根目录里的 `start.command`。
 
 克隆本仓库后：
 
