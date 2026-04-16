@@ -212,7 +212,7 @@ button:disabled {
   font-family: "MesloLGS NF", "MesloLGS Nerd Font", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.real-prompt {
+.prompt-output {
   margin: 0;
   min-height: 72px;
   max-height: 220px;

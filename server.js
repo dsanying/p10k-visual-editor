@@ -325,57 +325,6 @@ function snapshotFor(dirInput) {
   return { dir: safeDir, requestedDir: dir, exists, values };
 }
 
-function quoteForZsh(value) {
-  return `'${String(value).replace(/'/g, "'\\''")}'`;
-}
-
-function stripScriptNoise(output) {
-  return output
-    .replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\)/g, '')
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, (sequence) => sequence.endsWith('m') ? sequence : '')
-    .replace(/^(?:\^D|\x04)?\x08+/, '')
-    .replace(/^(?:\^D|\x04)/, '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/^Restored session:[^\n]*(?:\n|$)/gm, '')
-    .replace(/^Saving session\.\.\.(?:completed\.)?(?:\n|$)/gm, '')
-    .replace(/Saving session\.\.\.completed\./g, '')
-    .replace(/^\n+/, '')
-    .trimEnd();
-}
-
-function renderPrompt(dirInput, columnsInput, configOverridePath) {
-  const dir = dirInput ? resolveUserPath(dirInput) : process.cwd();
-  const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
-  const safeDir = exists ? dir : process.cwd();
-  const columns = Math.max(60, Math.min(240, Number(columnsInput || 120)));
-  const scriptBody = [
-    `cd -- ${quoteForZsh(safeDir)} || exit 1`,
-    configOverridePath ? `source ${quoteForZsh(configOverridePath)}` : '',
-    'for f in $precmd_functions; do $f 2>/dev/null || true; done',
-    'print -rP -- "${(e)PROMPT}"',
-  ].filter(Boolean).join('; ');
-  try {
-    const ansi = childProcess.execFileSync('script', ['-q', '/dev/null', 'zsh', '-ic', scriptBody], {
-      cwd: safeDir,
-      encoding: 'utf8',
-      env: shellEnv(columns),
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5000,
-    });
-    return { dir: safeDir, requestedDir: dir, exists, columns, ansi: stripScriptNoise(ansi), error: '' };
-  } catch (err) {
-    return {
-      dir: safeDir,
-      requestedDir: dir,
-      exists,
-      columns,
-      ansi: '',
-      error: err.message || 'zsh render failed',
-    };
-  }
-}
-
 function shellEnv(columns) {
   return {
     ...process.env,
@@ -406,17 +355,6 @@ function buildConfig(input, original) {
 
 function isSegmentId(id) {
   return typeof id === 'string' && /^[a-zA-Z0-9_]+$/.test(id);
-}
-
-function renderPromptWithConfig(dirInput, columnsInput, input) {
-  const configPath = resolveConfigPath(input.configPath);
-  const tempPath = path.join(os.tmpdir(), `p10k-editor-preview-${process.pid}-${Date.now()}.zsh`);
-  fs.writeFileSync(tempPath, buildConfig(input, readConfig(configPath)));
-  try {
-    return renderPrompt(dirInput, columnsInput, tempPath);
-  } finally {
-    fs.rmSync(tempPath, { force: true });
-  }
 }
 
 function createInteractiveShell(input) {
@@ -594,24 +532,6 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && req.url.startsWith('/api/select-dir')) {
       writeJson(res, 200, { path: selectDirectory() });
-      return;
-    }
-    if (req.method === 'GET' && req.url.startsWith('/api/render')) {
-      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
-      writeJson(res, 200, renderPrompt(
-        requestUrl.searchParams.get('dir'),
-        requestUrl.searchParams.get('columns')
-      ));
-      return;
-    }
-    if (req.method === 'POST' && req.url.startsWith('/api/render')) {
-      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
-      const body = await readBody(req);
-      writeJson(res, 200, renderPromptWithConfig(
-        requestUrl.searchParams.get('dir'),
-        requestUrl.searchParams.get('columns'),
-        JSON.parse(body)
-      ));
       return;
     }
     if (req.method === 'POST' && req.url === '/api/config') {

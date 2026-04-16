@@ -2,10 +2,6 @@
 
 let state = null;
 let backendMode = 'detecting';
-const ANSI_COLORS = [
-  '#000000', '#800000', '#008000', '#808000', '#000080', '#800080', '#008080', '#c0c0c0',
-  '#808080', '#ff0000', '#00ff00', '#ffff00', '#0000ff', '#ff00ff', '#00ffff', '#ffffff',
-];
 
 const leftList = document.querySelector('#left-list');
 const rightList = document.querySelector('#right-list');
@@ -14,7 +10,7 @@ const messageEl = document.querySelector('#message');
 const rawEl = document.querySelector('#raw-config');
 const previewDirInput = document.querySelector('#preview-dir');
 const previewNote = document.querySelector('#preview-note');
-const realPromptEl = document.querySelector('#real-prompt');
+const promptOutputEl = document.querySelector('#prompt-output');
 const saveButton = document.querySelector('#save');
 const settingsNote = document.querySelector('#settings-note');
 const configPathInput = document.querySelector('#config-path-input');
@@ -28,8 +24,6 @@ const terminalCloseButton = document.querySelector('#terminal-close');
 const terminalDialog = document.querySelector('#terminal-dialog');
 const terminalEl = document.querySelector('#terminal');
 let snapshot = { values: {} };
-let realRender = { ansi: '', error: '' };
-let renderTimer = null;
 let uploadedConfigText = '';
 let uploadedFileName = '.p10k.zsh';
 let terminal = null;
@@ -222,14 +216,13 @@ async function load() {
     document.querySelector('#config-path').textContent = `真实模式：正在编辑 ${state.path}`;
     configPathInput.value = state.path;
     configHelp.textContent = '已连接本机后端。修改路径后按回车或离开输入框会重新加载。';
-    previewNote.textContent = '真实渲染。目录不会自动刷新。';
+    previewNote.textContent = '模拟渲染。用交互 zsh 查看真实效果。';
     settingsNote.innerHTML = '保存后执行 <code>source ~/.p10k.zsh</code> 或 <code>exec zsh</code> 生效。';
     if (!previewDirInput.value) {
       previewDirInput.value = state.home || state.path.replace(/\/\.p10k\.zsh$/, '');
     }
     rawEl.textContent = await api(rawApiPath());
     await loadSnapshot();
-    await loadRealRender();
   } catch {
     backendMode = 'preview';
     state = previewState();
@@ -316,35 +309,6 @@ function loadPreviewSnapshot() {
     exists: false,
     values,
   };
-}
-
-async function loadRealRender() {
-  if (backendMode !== 'real') {
-    realRender = { ansi: '', error: '' };
-    return;
-  }
-  realRender = await api(`api/render?dir=${encodeURIComponent(previewDirInput.value)}&columns=120`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      configPath: configPathInput.value.trim(),
-      left: state.left,
-      right: state.right,
-      settings: state.settings,
-    }),
-  });
-}
-
-function scheduleRealRender() {
-  if (backendMode !== 'real') {
-    loadPreviewSnapshot();
-    renderPreview();
-    return;
-  }
-  if (renderTimer) clearTimeout(renderTimer);
-  renderTimer = setTimeout(() => {
-    loadRealRender().then(renderPreview).catch((err) => showMessage(err.message, true));
-  }, 250);
 }
 
 function segmentInfo(id) {
@@ -444,7 +408,6 @@ function toggleSegment(side, id, checked) {
   }
   state[side] = state[orderKey].filter((item) => enabled.has(item));
   render();
-  scheduleRealRender();
 }
 
 function moveSegment(side, id, delta) {
@@ -460,7 +423,6 @@ function moveSegment(side, id, delta) {
   const disabled = state[orderKey].filter((item) => !list.includes(item));
   state[orderKey] = [...list, ...disabled];
   render();
-  scheduleRealRender();
 }
 
 function renderSettings() {
@@ -489,7 +451,6 @@ function renderSettings() {
     input.addEventListener('input', () => {
       state.settings[name] = input.value;
       renderPreview();
-      scheduleRealRender();
     });
     wrap.append(labelEl, input);
     settingsEl.append(wrap);
@@ -636,20 +597,7 @@ function renderPreview() {
   const usesNewline = state.left.includes('newline') || state.right.includes('newline');
   const line1 = document.querySelector('#preview-line-1');
   const line2 = document.querySelector('#preview-line-2');
-  if (backendMode === 'real') {
-    const realHtml = realRender.error
-      ? `<span class="ansi-error">${escapeHtml(realRender.error)}</span>`
-      : ansiToHtml(realRender.ansi);
-    realPromptEl.innerHTML = [
-      '<div class="preview-label">真实渲染</div>',
-      realHtml || '<span class="ansi-error">暂无真实渲染输出</span>',
-      '<div class="preview-label preview-label-secondary">模拟渲染</div>',
-      renderStaticPrompt(leftLines, rightLines, usesNewline),
-    ].join('');
-  } else {
-    realPromptEl.innerHTML = renderStaticPrompt(leftLines, rightLines, usesNewline);
-  }
-  realPromptEl.hidden = false;
+  promptOutputEl.innerHTML = renderStaticPrompt(leftLines, rightLines, usesNewline);
   document.querySelector('#preview-left-frame').textContent = usesNewline ? '╭─' : '─';
   document.querySelector('#preview-right-frame').textContent = usesNewline ? '─╮' : '─';
   line1.classList.toggle('single-line', !usesNewline);
@@ -682,82 +630,6 @@ function renderStaticPrompt(leftLines, rightLines, usesNewline) {
 function staticSegment(id, side) {
   const value = snapshot.values[id] || segmentInfo(id)[1] || id;
   return `<span class="static-segment ${side}">${escapeHtml(value)}</span>`;
-}
-
-function ansiToHtml(input) {
-  let fg = '';
-  let bg = '';
-  let bold = false;
-  let html = '';
-  const parts = String(input).split(/(\x1b\[[0-9;]*m)/g);
-  for (const part of parts) {
-    const match = part.match(/^\x1b\[([0-9;]*)m$/);
-    if (!match) {
-      if (part) html += wrapAnsiText(part, fg, bg, bold);
-      continue;
-    }
-    const codes = match[1] ? match[1].split(';').map(Number) : [0];
-    for (let i = 0; i < codes.length; i += 1) {
-      const code = codes[i];
-      if (code === 0) {
-        fg = '';
-        bg = '';
-        bold = false;
-      } else if (code === 1) {
-        bold = true;
-      } else if (code === 22) {
-        bold = false;
-      } else if (code === 39) {
-        fg = '';
-      } else if (code === 49) {
-        bg = '';
-      } else if (code >= 30 && code <= 37) {
-        fg = ANSI_COLORS[code - 30];
-      } else if (code >= 90 && code <= 97) {
-        fg = ANSI_COLORS[code - 90 + 8];
-      } else if (code >= 40 && code <= 47) {
-        bg = ANSI_COLORS[code - 40];
-      } else if (code >= 100 && code <= 107) {
-        bg = ANSI_COLORS[code - 100 + 8];
-      } else if (code === 38 && codes[i + 1] === 5) {
-        fg = xtermColor(codes[i + 2]);
-        i += 2;
-      } else if (code === 48 && codes[i + 1] === 5) {
-        bg = xtermColor(codes[i + 2]);
-        i += 2;
-      } else if (code >= 3000 && code <= 3255) {
-        fg = xtermColor(code - 3000);
-      } else if (code >= 4000 && code <= 4255) {
-        bg = xtermColor(code - 4000);
-      }
-    }
-  }
-  return html || '暂无可渲染内容';
-}
-
-function wrapAnsiText(text, fg, bg, bold) {
-  const style = [
-    fg ? `color:${fg}` : '',
-    bg ? `background-color:${bg}` : '',
-    bold ? 'font-weight:700' : '',
-  ].filter(Boolean).join(';');
-  const escaped = escapeHtml(text);
-  return style ? `<span style="${style}">${escaped}</span>` : escaped;
-}
-
-function xtermColor(code) {
-  if (code < 0 || code > 255 || Number.isNaN(code)) return '';
-  if (code < 16) return ANSI_COLORS[code];
-  if (code >= 232) {
-    const level = 8 + (code - 232) * 10;
-    return `rgb(${level},${level},${level})`;
-  }
-  const n = code - 16;
-  const r = Math.floor(n / 36);
-  const g = Math.floor((n % 36) / 6);
-  const b = n % 6;
-  const v = [r, g, b].map((value) => value === 0 ? 0 : 55 + value * 40);
-  return `rgb(${v[0]},${v[1]},${v[2]})`;
 }
 
 function renderPreviewSegment(id) {
@@ -818,7 +690,6 @@ async function loadConfigFromPath() {
     configPathInput.value = state.path;
     rawEl.textContent = await api(rawApiPath());
     await loadSnapshot();
-    await loadRealRender();
     render();
     if (state.path !== previousPath) {
       showMessage(`已加载配置：${state.path}`);
@@ -839,7 +710,7 @@ async function selectPreviewDirectory() {
   try {
     const result = await api('api/select-dir');
     previewDirInput.value = result.path;
-    await Promise.all([loadSnapshot(), loadRealRender()]);
+    await loadSnapshot();
     renderPreview();
     showMessage(`已选择预览目录：${result.path}`);
   } catch (err) {
@@ -1112,7 +983,7 @@ previewDirInput.addEventListener('change', () => {
     renderPreview();
     return;
   }
-  Promise.all([loadSnapshot(), loadRealRender()])
+  loadSnapshot()
     .then(renderPreview)
     .catch((err) => showMessage(err.message, true));
 });
