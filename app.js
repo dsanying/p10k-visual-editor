@@ -21,12 +21,15 @@ const configPathInput = document.querySelector('#config-path-input');
 const loadConfigButton = document.querySelector('#load-config');
 const configFileInput = document.querySelector('#config-file-input');
 const configHelp = document.querySelector('#config-help');
+const previewCommandInput = document.querySelector('#preview-command');
+const executeCommandButton = document.querySelector('#execute-command');
 let snapshot = { values: {} };
 let realRender = { ansi: '', error: '' };
 let snapshotTimer = null;
 let renderTimer = null;
 let uploadedConfigText = '';
 let uploadedFileName = '.p10k.zsh';
+let showingExecution = false;
 
 const segmentExamples = {
   newline: ['第一行显示路径，第二行输入命令', '所有内容尽量挤在同一行'],
@@ -218,6 +221,7 @@ async function load() {
     backendMode = 'real';
     saveButton.disabled = false;
     saveButton.textContent = '保存配置';
+    executeCommandButton.disabled = false;
     loadConfigButton.disabled = false;
     configPathInput.disabled = false;
     previewDirInput.disabled = false;
@@ -239,6 +243,7 @@ async function load() {
     state = previewState();
     saveButton.disabled = false;
     saveButton.textContent = '下载配置';
+    executeCommandButton.disabled = true;
     loadConfigButton.disabled = true;
     document.body.dataset.mode = 'preview';
     document.querySelector('#config-path').textContent = '未连接本机后端。可以选择本地配置文件进行预览，并下载修改后的配置。';
@@ -281,7 +286,9 @@ function startSnapshotTimer() {
   if (snapshotTimer) clearInterval(snapshotTimer);
   snapshotTimer = setInterval(() => {
     if (backendMode === 'real') {
-      Promise.all([loadSnapshot(), loadRealRender()]).then(renderPreview).catch(() => {});
+      const tasks = [loadSnapshot()];
+      if (!showingExecution) tasks.push(loadRealRender());
+      Promise.all(tasks).then(renderPreview).catch(() => {});
     } else {
       loadPreviewSnapshot();
       renderPreview();
@@ -331,11 +338,16 @@ function loadPreviewSnapshot() {
   };
 }
 
+function previewCommandText() {
+  return previewCommandInput.value || '';
+}
+
 async function loadRealRender() {
   if (backendMode !== 'real') {
     realRender = { ansi: '', error: '' };
     return;
   }
+  showingExecution = false;
   realRender = await api(`api/render?dir=${encodeURIComponent(previewDirInput.value)}&columns=120`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -664,8 +676,11 @@ function renderPreview() {
     const realHtml = realRender.error
       ? `<span class="ansi-error">${escapeHtml(realRender.error)}</span>`
       : ansiToHtml(realRender.ansi);
+    const realLabel = typeof realRender.exitCode === 'number'
+      ? `真实 zsh 执行结果（退出码 ${realRender.exitCode}）`
+      : '真实 zsh 渲染';
     realPromptEl.innerHTML = [
-      '<div class="preview-label">真实 zsh 渲染</div>',
+      `<div class="preview-label">${escapeHtml(realLabel)}</div>`,
       realHtml || '<span class="ansi-error">暂无真实渲染输出</span>',
       '<div class="preview-label preview-label-secondary">无真实环境时的虚拟预览</div>',
       renderStaticPrompt(leftLines, rightLines, usesNewline),
@@ -688,17 +703,18 @@ function renderPreview() {
 }
 
 function renderStaticPrompt(leftLines, rightLines, usesNewline) {
+  const command = escapeHtml(previewCommandText());
   const left = leftLines.before.map((id) => staticSegment(id, 'left')).join('');
   const right = rightLines.before.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
   const gap = '<span class="static-gap">··································</span>';
   if (!usesNewline) {
-    return `<div class="static-prompt-row">─${left}${gap}${right}─</div>`;
+    return `<div class="static-prompt-row">─${left}${gap}${right} ${command}─</div>`;
   }
   const bottomLeft = leftLines.after.map((id) => staticSegment(id, 'left')).join('');
   const bottomRight = rightLines.after.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
   return [
     `<div class="static-prompt-row">╭─${left}${gap}${right}─╮</div>`,
-    `<div class="static-prompt-row">╰─${bottomLeft} gf run main.go <span class="static-gap">················</span>${bottomRight}─╯</div>`,
+    `<div class="static-prompt-row">╰─${bottomLeft} ${command} <span class="static-gap">················</span>${bottomRight}─╯</div>`,
   ].join('');
 }
 
@@ -831,6 +847,42 @@ async function save() {
   showMessage(`已保存。原文件备份到：${result.backupPath}`);
 }
 
+async function executePreviewCommand() {
+  hideMessage();
+  if (backendMode !== 'real') {
+    showMessage('只有本机真实模式可以执行测试命令。', true);
+    return;
+  }
+  const command = previewCommandText().trim();
+  if (!command) {
+    showMessage('请输入要执行的测试命令。', true);
+    return;
+  }
+  executeCommandButton.disabled = true;
+  executeCommandButton.textContent = '执行中...';
+  try {
+    realRender = await api(`api/execute?dir=${encodeURIComponent(previewDirInput.value)}&columns=120`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        configPath: configPathInput.value.trim(),
+        left: state.left,
+        right: state.right,
+        settings: state.settings,
+        command,
+      }),
+    });
+    showingExecution = true;
+    renderPreview();
+    showMessage(`测试命令执行完成，退出码：${realRender.exitCode}`);
+  } catch (err) {
+    showMessage(`测试命令执行失败：${err.message}`, true);
+  } finally {
+    executeCommandButton.disabled = false;
+    executeCommandButton.textContent = '执行测试命令';
+  }
+}
+
 function downloadConfig() {
   const source = uploadedConfigText || fallbackConfigText();
   const next = buildConfigText({
@@ -855,6 +907,15 @@ document.querySelector('#reload').addEventListener('click', () => {
 
 document.querySelector('#save').addEventListener('click', () => {
   save().catch((err) => showMessage(err.message, true));
+});
+
+executeCommandButton.addEventListener('click', () => {
+  executePreviewCommand().catch((err) => showMessage(err.message, true));
+});
+
+previewCommandInput.addEventListener('input', () => {
+  document.querySelector('#preview-command-text').textContent = previewCommandText();
+  if (state) renderPreview();
 });
 
 loadConfigButton.addEventListener('click', () => {

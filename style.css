@@ -186,7 +186,8 @@ button:disabled {
   font-weight: 650;
 }
 
-.preview-dir {
+.preview-dir,
+.preview-input {
   display: grid;
   gap: 5px;
   min-width: min(520px, 100%);
@@ -194,7 +195,12 @@ button:disabled {
   font-weight: 650;
 }
 
-.preview-dir input {
+.preview-input {
+  min-width: min(360px, 100%);
+}
+
+.preview-dir input,
+.preview-input input {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;

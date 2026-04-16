@@ -50,6 +50,11 @@
             预览目录
             <input id="preview-dir" type="text" spellcheck="false">
           </label>
+          <label class="preview-input">
+            测试命令
+            <input id="preview-command" type="text" spellcheck="false" value="npm start" placeholder="输入后点按钮，会真实执行">
+          </label>
+          <button id="execute-command" type="button">执行测试命令</button>
         </div>
         <div class="prompt-preview">
           <div id="real-prompt" class="real-prompt">读取中...</div>
@@ -62,7 +67,7 @@
           </div>
           <div class="prompt-row" id="preview-line-2">
             <span class="frame">╰─</span>
-            <span class="command">gf run main.go</span>
+            <span class="command" id="preview-command-text">npm start</span>
             <span class="fill small">························</span>
             <span class="frame">─╯</span>
           </div>
