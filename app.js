@@ -18,7 +18,6 @@ const realPromptEl = document.querySelector('#real-prompt');
 const saveButton = document.querySelector('#save');
 const settingsNote = document.querySelector('#settings-note');
 const configPathInput = document.querySelector('#config-path-input');
-const loadConfigButton = document.querySelector('#load-config');
 const configFileInput = document.querySelector('#config-file-input');
 const configHelp = document.querySelector('#config-help');
 const previewCommandInput = document.querySelector('#preview-command');
@@ -223,13 +222,12 @@ async function load() {
     saveButton.textContent = '保存配置';
     executeCommandButton.disabled = false;
     selectDirButton.disabled = false;
-    loadConfigButton.disabled = false;
     configPathInput.disabled = false;
     previewDirInput.disabled = false;
     document.body.dataset.mode = 'real';
     document.querySelector('#config-path').textContent = `真实模式：正在编辑 ${state.path}`;
     configPathInput.value = state.path;
-    configHelp.textContent = '已连接本机后端。可以自动加载默认配置，也可以输入其他配置路径后加载。';
+    configHelp.textContent = '已连接本机后端。默认自动加载配置；手动修改路径后按回车或离开输入框会重新加载。';
     previewNote.textContent = '真实模式：本机 zsh + Powerlevel10k 渲染。目录不会自动刷新。';
     settingsNote.innerHTML = '这些参数会影响整体显示方式。每一项下面都有例子，保存后执行 <code>source ~/.p10k.zsh</code> 生效。';
     if (!previewDirInput.value) {
@@ -245,7 +243,6 @@ async function load() {
     saveButton.textContent = '下载配置';
     executeCommandButton.disabled = true;
     selectDirButton.disabled = true;
-    loadConfigButton.disabled = true;
     document.body.dataset.mode = 'preview';
     document.querySelector('#config-path').textContent = '未连接本机后端。可以选择本地配置文件进行预览，并下载修改后的配置。';
     configPathInput.value = '~/.p10k.zsh';
@@ -870,6 +867,26 @@ async function executePreviewCommand() {
   }
 }
 
+async function loadConfigFromPath() {
+  if (backendMode !== 'real') return;
+  hideMessage();
+  const previousPath = state && state.path;
+  try {
+    const config = await api(configApiPath());
+    state = config;
+    configPathInput.value = state.path;
+    rawEl.textContent = await api(rawApiPath());
+    await loadSnapshot();
+    await loadRealRender();
+    render();
+    if (state.path !== previousPath) {
+      showMessage(`已加载配置：${state.path}`);
+    }
+  } catch (err) {
+    showMessage(`无法加载配置文件：${err.message}`, true);
+  }
+}
+
 async function selectPreviewDirectory() {
   hideMessage();
   if (backendMode !== 'real') {
@@ -931,19 +948,14 @@ previewCommandInput.addEventListener('input', () => {
   if (state) renderPreview();
 });
 
-loadConfigButton.addEventListener('click', () => {
-  if (backendMode !== 'real') return;
-  hideMessage();
-  api(configApiPath())
-    .then(async (config) => {
-      state = config;
-      configPathInput.value = state.path;
-      rawEl.textContent = await api(rawApiPath());
-      await loadRealRender();
-      render();
-      showMessage(`已加载配置：${state.path}`);
-    })
-    .catch((err) => showMessage(`无法加载配置文件：${err.message}`, true));
+configPathInput.addEventListener('change', () => {
+  loadConfigFromPath().catch((err) => showMessage(`无法加载配置文件：${err.message}`, true));
+});
+
+configPathInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  configPathInput.blur();
 });
 
 configFileInput.addEventListener('change', () => {
@@ -963,7 +975,7 @@ configFileInput.addEventListener('change', () => {
       showMessage(`已读取配置文件：${uploadedFileName}`);
       return;
     }
-    showMessage('已选择文件。当前是真实模式，如需直接写回某个路径，请在“配置路径”里填写路径后加载。');
+    showMessage('已选择文件。当前是真实模式，如需直接写回某个路径，请在“配置路径”里填写路径后按回车。');
   };
   reader.onerror = () => showMessage('读取配置文件失败。', true);
   reader.readAsText(file);
