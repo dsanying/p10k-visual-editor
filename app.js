@@ -604,37 +604,108 @@ function renderPreview() {
   line2.hidden = !usesNewline;
   document.querySelector('#left-preview').innerHTML = leftLines.before
     .map((id) => renderPreviewSegment(id))
+    .filter(Boolean)
     .join('');
   document.querySelector('#right-preview').innerHTML = rightLines.before
-    .slice(0, 8)
     .map((id) => renderPreviewSegment(id))
+    .filter(Boolean)
     .join('');
 }
 
 function renderStaticPrompt(leftLines, rightLines, usesNewline) {
   const command = 'npm start';
-  const left = leftLines.before.map((id) => staticSegment(id, 'left')).join('');
-  const right = rightLines.before.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
-  const gap = '<span class="static-gap">··································</span>';
+  const left = leftLines.before.map((id) => staticSegment(id, 'left')).filter(Boolean).join('');
+  const right = rightLines.before.map((id) => staticSegment(id, 'right')).filter(Boolean).join('');
+  const topGap = renderStaticGap();
+  const commandGap = renderStaticGap();
+  const leadingBlank = boolSetting('POWERLEVEL9K_PROMPT_ADD_NEWLINE')
+    ? '<div class="static-empty-line"></div>'
+    : '';
   if (!usesNewline) {
-    return `<div class="static-prompt-row">─${left}${gap}${right} ${command}─</div>`;
+    return `${leadingBlank}<div class="static-prompt-row">─${left}${topGap}${right} ${command}─</div>`;
   }
-  const bottomLeft = leftLines.after.map((id) => staticSegment(id, 'left')).join('');
-  const bottomRight = rightLines.after.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
+  const bottomLeft = leftLines.after.map((id) => staticSegment(id, 'left')).filter(Boolean).join('');
+  const bottomRight = rightLines.after.map((id) => staticSegment(id, 'right')).filter(Boolean).join('');
   return [
-    `<div class="static-prompt-row">╭─${left}${gap}${right}─╮</div>`,
-    `<div class="static-prompt-row">╰─${bottomLeft} ${command} <span class="static-gap">················</span>${bottomRight}─╯</div>`,
+    leadingBlank,
+    `<div class="static-prompt-row">╭─${left}${topGap}${right}─╮</div>`,
+    `<div class="static-prompt-row">╰─${bottomLeft} ${command} ${commandGap}${bottomRight}─╯</div>`,
   ].join('');
 }
 
 function staticSegment(id, side) {
-  const value = snapshot.values[id] || segmentInfo(id)[1] || id;
+  const value = previewValue(id);
+  if (!value) return '';
   return `<span class="static-segment ${side}">${escapeHtml(value)}</span>`;
 }
 
 function renderPreviewSegment(id) {
-  const value = snapshot.values[id] || segmentInfo(id)[1] || id;
+  const value = previewValue(id);
+  if (!value) return '';
   return `<span title="${escapeHtml(segmentInfo(id)[1])}">${escapeHtml(value)}</span>`;
+}
+
+function previewValue(id) {
+  const raw = snapshot.values[id] || segmentInfo(id)[1] || id;
+  if (id === 'dir') {
+    return shortenValue(String(raw), numberSetting('POWERLEVEL9K_DIR_MAX_LENGTH', 80));
+  }
+  if (id === 'command_execution_time') {
+    const seconds = 8;
+    if (seconds < numberSetting('POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD', 3)) {
+      return '';
+    }
+    return `${stringSetting('POWERLEVEL9K_COMMAND_EXECUTION_TIME_PREFIX', 'took ')}${seconds}s`;
+  }
+  if (id === 'time') {
+    return `${stringSetting('POWERLEVEL9K_TIME_PREFIX', 'at ')}${formatPreviewTime(stringSetting('POWERLEVEL9K_TIME_FORMAT', '%D{%H:%M:%S}'))}`;
+  }
+  return raw;
+}
+
+function renderStaticGap() {
+  const fill = gapFillChar();
+  const repeated = fill ? fill.repeat(240) : '\u00a0';
+  return `<span class="static-gap">${escapeHtml(repeated)}</span>`;
+}
+
+function gapFillChar() {
+  const value = stringSetting('POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR', '·');
+  if (!value.trim()) return '';
+  return value[0];
+}
+
+function shortenValue(value, maxLength) {
+  const max = Math.max(8, Number(maxLength || 80));
+  if (value.length <= max) return value;
+  const keep = Math.max(3, max - 4);
+  const head = Math.ceil(keep * 0.45);
+  const tail = Math.floor(keep * 0.55);
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
+}
+
+function formatPreviewTime(format) {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  return String(format || '%D{%H:%M:%S}')
+    .replace('%D{%H:%M:%S}', `${hh}:${mm}:${ss}`)
+    .replace('%D{%H:%M}', `${hh}:${mm}`);
+}
+
+function boolSetting(name) {
+  return String(state.settings?.[name] ?? '').trim() === 'true';
+}
+
+function numberSetting(name, fallback) {
+  const value = Number(state.settings?.[name]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function stringSetting(name, fallback) {
+  const value = state.settings?.[name];
+  return value == null || value === '' ? fallback : String(value);
 }
 
 function splitByNewline(items) {
