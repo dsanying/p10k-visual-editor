@@ -93,6 +93,10 @@ const settingsCatalog = [
 ];
 
 function resolveConfigPath(inputPath) {
+  return resolveUserPath(inputPath || DEFAULT_CONFIG_PATH);
+}
+
+function resolveUserPath(inputPath) {
   if (!inputPath) return DEFAULT_CONFIG_PATH;
   if (inputPath === '~') return os.homedir();
   if (inputPath.startsWith('~/')) return path.join(os.homedir(), inputPath.slice(2));
@@ -232,7 +236,7 @@ function packageSnapshot(dir) {
 }
 
 function snapshotFor(dirInput) {
-  const dir = path.resolve(dirInput || process.cwd());
+  const dir = dirInput ? resolveUserPath(dirInput) : process.cwd();
   const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
   const safeDir = exists ? dir : process.cwd();
   const now = new Date();
@@ -240,60 +244,60 @@ function snapshotFor(dirInput) {
     newline: '',
     os_icon: process.platform === 'darwin' ? '' : os.type(),
     dir: displayPath(safeDir),
-    vcs: gitSnapshot(safeDir),
+    vcs: gitSnapshot(safeDir) || 'on main *1',
     prompt_char: '❯',
-    status: '网页无法读取上一条命令状态',
-    command_execution_time: '网页无法读取上一条命令耗时',
-    background_jobs: '',
-    direnv: process.env.DIRENV_DIR ? 'direnv' : '',
-    asdf: '',
-    virtualenv: process.env.VIRTUAL_ENV ? path.basename(process.env.VIRTUAL_ENV) : '',
-    anaconda: process.env.CONDA_DEFAULT_ENV || '',
-    pyenv: runCommand('pyenv', ['version-name'], safeDir),
-    goenv: runCommand('goenv', ['version-name'], safeDir),
-    nodenv: runCommand('nodenv', ['version-name'], safeDir),
-    nvm: '',
-    nodeenv: process.env.NODE_VIRTUAL_ENV ? path.basename(process.env.NODE_VIRTUAL_ENV) : '',
-    node_version: runCommand('node', ['--version'], safeDir),
-    go_version: runCommand('go', ['version'], safeDir).replace(/^go version /, '').split(' ').slice(0, 1).join(' '),
-    rust_version: runCommand('rustc', ['--version'], safeDir).split(' ').slice(0, 2).join(' '),
-    dotnet_version: runCommand('dotnet', ['--version'], safeDir),
-    php_version: runCommand('php', ['-r', 'echo PHP_VERSION;'], safeDir),
-    java_version: runCommand('java', ['-version'], safeDir).split('\n')[0],
-    package: packageSnapshot(safeDir),
-    rbenv: runCommand('rbenv', ['version-name'], safeDir),
-    rvm: process.env.rvm_ruby_string || '',
-    fvm: runCommand('fvm', ['--version'], safeDir),
-    luaenv: runCommand('luaenv', ['version-name'], safeDir),
-    jenv: runCommand('jenv', ['version-name'], safeDir),
-    plenv: runCommand('plenv', ['version-name'], safeDir),
-    perlbrew: process.env.PERLBREW_PERL || '',
-    phpenv: runCommand('phpenv', ['version-name'], safeDir),
-    scalaenv: runCommand('scalaenv', ['version-name'], safeDir),
-    haskell_stack: runCommand('stack', ['--resolver'], safeDir),
-    kubecontext: runCommand('kubectl', ['config', 'current-context'], safeDir),
-    terraform: runCommand('terraform', ['workspace', 'show'], safeDir),
-    terraform_version: runCommand('terraform', ['version', '-json'], safeDir).match(/"terraform_version"\s*:\s*"([^"]+)"/)?.[1] || '',
-    aws: [process.env.AWS_PROFILE, process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION].filter(Boolean).join(' '),
-    aws_eb_env: '',
-    azure: '',
-    gcloud: runCommand('gcloud', ['config', 'get-value', 'project'], safeDir),
-    google_app_cred: process.env.GOOGLE_APPLICATION_CREDENTIALS ? path.basename(process.env.GOOGLE_APPLICATION_CREDENTIALS) : '',
+    status: '128 ✘',
+    command_execution_time: 'took 8s',
+    background_jobs: '≡',
+    direnv: process.env.DIRENV_DIR ? 'direnv' : 'direnv',
+    asdf: 'nodejs 1.0.0',
+    virtualenv: process.env.VIRTUAL_ENV ? path.basename(process.env.VIRTUAL_ENV) : 'venv',
+    anaconda: process.env.CONDA_DEFAULT_ENV || 'base',
+    pyenv: runCommand('pyenv', ['version-name'], safeDir) || '1.0.0',
+    goenv: runCommand('goenv', ['version-name'], safeDir) || '1.0.0',
+    nodenv: runCommand('nodenv', ['version-name'], safeDir) || '1.0.0',
+    nvm: '1.0.0',
+    nodeenv: process.env.NODE_VIRTUAL_ENV ? path.basename(process.env.NODE_VIRTUAL_ENV) : 'nodeenv',
+    node_version: runCommand('node', ['--version'], safeDir) || 'v1.0.0',
+    go_version: runCommand('go', ['version'], safeDir).replace(/^go version /, '').split(' ').slice(0, 1).join(' ') || 'go1.0.0',
+    rust_version: runCommand('rustc', ['--version'], safeDir).split(' ').slice(0, 2).join(' ') || 'rustc 1.0.0',
+    dotnet_version: runCommand('dotnet', ['--version'], safeDir) || '1.0.0',
+    php_version: runCommand('php', ['-r', 'echo PHP_VERSION;'], safeDir) || '1.0.0',
+    java_version: runCommand('java', ['-version'], safeDir).split('\n')[0] || 'java 1.0.0',
+    package: packageSnapshot(safeDir) || 'project@1.0.0',
+    rbenv: runCommand('rbenv', ['version-name'], safeDir) || '1.0.0',
+    rvm: process.env.rvm_ruby_string || 'ruby-1.0.0',
+    fvm: runCommand('fvm', ['--version'], safeDir) || '1.0.0',
+    luaenv: runCommand('luaenv', ['version-name'], safeDir) || '1.0.0',
+    jenv: runCommand('jenv', ['version-name'], safeDir) || '1.0.0',
+    plenv: runCommand('plenv', ['version-name'], safeDir) || '1.0.0',
+    perlbrew: process.env.PERLBREW_PERL || 'perl-1.0.0',
+    phpenv: runCommand('phpenv', ['version-name'], safeDir) || '1.0.0',
+    scalaenv: runCommand('scalaenv', ['version-name'], safeDir) || '1.0.0',
+    haskell_stack: runCommand('stack', ['--resolver'], safeDir) || 'lts-1.0',
+    kubecontext: runCommand('kubectl', ['config', 'current-context'], safeDir) || 'dev-cluster',
+    terraform: runCommand('terraform', ['workspace', 'show'], safeDir) || 'default',
+    terraform_version: runCommand('terraform', ['version', '-json'], safeDir).match(/"terraform_version"\s*:\s*"([^"]+)"/)?.[1] || '1.0.0',
+    aws: [process.env.AWS_PROFILE, process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION].filter(Boolean).join(' ') || 'default us-east-1',
+    aws_eb_env: 'eb-default',
+    azure: 'default-account',
+    gcloud: runCommand('gcloud', ['config', 'get-value', 'project'], safeDir) || 'demo-project',
+    google_app_cred: process.env.GOOGLE_APPLICATION_CREDENTIALS ? path.basename(process.env.GOOGLE_APPLICATION_CREDENTIALS) : 'service-account.json',
     context: `${os.userInfo().username}@${os.hostname().split('.')[0]}`,
-    nix_shell: process.env.IN_NIX_SHELL ? 'nix shell' : '',
-    chezmoi_shell: process.env.CHEZMOI ? 'chezmoi' : '',
-    vi_mode: '',
-    todo: '',
-    timewarrior: '',
-    taskwarrior: '',
-    per_directory_history: '',
+    nix_shell: process.env.IN_NIX_SHELL ? 'nix shell' : 'nix shell',
+    chezmoi_shell: process.env.CHEZMOI ? 'chezmoi' : 'chezmoi',
+    vi_mode: 'NORMAL',
+    todo: 'todo 3',
+    timewarrior: 'coding 12m',
+    taskwarrior: 'task 5',
+    per_directory_history: 'local history',
     cpu_arch: os.arch(),
     time: `at ${now.toLocaleTimeString('zh-CN', { hour12: false })}`,
-    ip: '',
-    public_ip: '',
-    proxy: process.env.HTTPS_PROXY || process.env.HTTP_PROXY ? 'proxy' : '',
-    battery: '',
-    wifi: '',
+    ip: '192.168.1.8',
+    public_ip: '203.0.113.8',
+    proxy: process.env.HTTPS_PROXY || process.env.HTTP_PROXY ? 'proxy' : 'proxy',
+    battery: '82%',
+    wifi: 'Wi-Fi',
   };
   return { dir: safeDir, requestedDir: dir, exists, values };
 }
@@ -316,7 +320,7 @@ function stripScriptNoise(output) {
 }
 
 function renderPrompt(dirInput, columnsInput, configOverridePath) {
-  const dir = path.resolve(dirInput || process.cwd());
+  const dir = dirInput ? resolveUserPath(dirInput) : process.cwd();
   const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
   const safeDir = exists ? dir : process.cwd();
   const columns = Math.max(60, Math.min(240, Number(columnsInput || 120)));

@@ -619,10 +619,20 @@ function renderPreview() {
   const usesNewline = state.left.includes('newline') || state.right.includes('newline');
   const line1 = document.querySelector('#preview-line-1');
   const line2 = document.querySelector('#preview-line-2');
-  realPromptEl.innerHTML = backendMode === 'real'
-    ? (realRender.error ? `<span class="ansi-error">${escapeHtml(realRender.error)}</span>` : ansiToHtml(realRender.ansi))
-    : renderStaticPrompt(leftLines, rightLines, usesNewline);
-  realPromptEl.hidden = backendMode === 'real' && !realRender.ansi && !realRender.error;
+  if (backendMode === 'real') {
+    const realHtml = realRender.error
+      ? `<span class="ansi-error">${escapeHtml(realRender.error)}</span>`
+      : ansiToHtml(realRender.ansi);
+    realPromptEl.innerHTML = [
+      '<div class="preview-label">真实 zsh 渲染</div>',
+      realHtml || '<span class="ansi-error">暂无真实渲染输出</span>',
+      '<div class="preview-label preview-label-secondary">无真实环境时的虚拟预览</div>',
+      renderStaticPrompt(leftLines, rightLines, usesNewline),
+    ].join('');
+  } else {
+    realPromptEl.innerHTML = renderStaticPrompt(leftLines, rightLines, usesNewline);
+  }
+  realPromptEl.hidden = false;
   document.querySelector('#preview-left-frame').textContent = usesNewline ? '╭─' : '─';
   document.querySelector('#preview-right-frame').textContent = usesNewline ? '─╮' : '─';
   line1.classList.toggle('single-line', !usesNewline);
@@ -652,8 +662,7 @@ function renderStaticPrompt(leftLines, rightLines, usesNewline) {
 }
 
 function staticSegment(id, side) {
-  const value = snapshot.values[id];
-  if (!value) return '';
+  const value = snapshot.values[id] || segmentInfo(id)[1] || id;
   return `<span class="static-segment ${side}">${escapeHtml(value)}</span>`;
 }
 
@@ -734,8 +743,7 @@ function xtermColor(code) {
 }
 
 function renderPreviewSegment(id) {
-  const value = snapshot.values[id];
-  if (!value) return '';
+  const value = snapshot.values[id] || segmentInfo(id)[1] || id;
   return `<span title="${escapeHtml(segmentInfo(id)[1])}">${escapeHtml(value)}</span>`;
 }
 
