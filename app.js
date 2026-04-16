@@ -350,6 +350,8 @@ function segmentInfo(id) {
 function render() {
   ensureUiOrder('left');
   ensureUiOrder('right');
+  ensurePromptOrder('left');
+  ensurePromptOrder('right');
   renderList('left', leftList);
   renderList('right', rightList);
   renderSettings();
@@ -364,6 +366,16 @@ function ensureUiOrder(side) {
     ...catalogIds,
     ...state[side].filter((id) => !catalogIds.includes(id)),
   ];
+}
+
+function ensurePromptOrder(side) {
+  const key = `${side}PromptOrder`;
+  if (!state[key]) {
+    state[key] = [...state[side]];
+    return;
+  }
+  const known = new Set(state[key]);
+  state[key].push(...state[side].filter((id) => !known.has(id)));
 }
 
 function renderList(side, container) {
@@ -422,16 +434,25 @@ function controlButton(label, onClick) {
 }
 
 function toggleSegment(side, id, checked) {
-  const next = state[side].filter((item) => item !== id);
-  if (checked) {
-    next.push(id);
+  ensurePromptOrder(side);
+  const orderKey = `${side}PromptOrder`;
+  if (!state[orderKey].includes(id)) {
+    state[orderKey].push(id);
   }
-  state[side] = next;
+  const enabled = new Set(state[side]);
+  if (checked) {
+    enabled.add(id);
+  } else {
+    enabled.delete(id);
+  }
+  state[side] = state[orderKey].filter((item) => enabled.has(item));
   render();
   scheduleRealRender();
 }
 
 function moveSegment(side, id, delta) {
+  ensurePromptOrder(side);
+  const orderKey = `${side}PromptOrder`;
   const list = [...state[side]];
   const index = list.indexOf(id);
   if (index < 0) return;
@@ -439,6 +460,8 @@ function moveSegment(side, id, delta) {
   if (next < 0 || next >= list.length) return;
   [list[index], list[next]] = [list[next], list[index]];
   state[side] = list;
+  const disabled = state[orderKey].filter((item) => !list.includes(item));
+  state[orderKey] = [...list, ...disabled];
   render();
   scheduleRealRender();
 }
