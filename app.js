@@ -20,18 +20,18 @@ const settingsNote = document.querySelector('#settings-note');
 const configPathInput = document.querySelector('#config-path-input');
 const configFileInput = document.querySelector('#config-file-input');
 const configHelp = document.querySelector('#config-help');
-const previewCommandInput = document.querySelector('#preview-command');
-const executeCommandButton = document.querySelector('#execute-command');
 const selectDirButton = document.querySelector('#select-dir');
+const terminalOpenButton = document.querySelector('#terminal-open');
 const terminalStartButton = document.querySelector('#terminal-start');
 const terminalStopButton = document.querySelector('#terminal-stop');
+const terminalCloseButton = document.querySelector('#terminal-close');
+const terminalDialog = document.querySelector('#terminal-dialog');
 const terminalEl = document.querySelector('#terminal');
 let snapshot = { values: {} };
 let realRender = { ansi: '', error: '' };
 let renderTimer = null;
 let uploadedConfigText = '';
 let uploadedFileName = '.p10k.zsh';
-let showingExecution = false;
 let terminal = null;
 let terminalSocket = null;
 
@@ -173,19 +173,6 @@ const fallbackCatalog = [
   ['wifi', 'Wi-Fi', '显示 Wi-Fi 状态'],
 ];
 
-const settingExamples = {
-  POWERLEVEL9K_PROMPT_ADD_NEWLINE: ['true：每个 prompt 前空一行，更清楚', 'false：更紧凑，不空行'],
-  POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR: ['·：中间用点填满', '空格：中间留白，不显示点线'],
-  POWERLEVEL9K_DIR_MAX_LENGTH: ['80：路径最多显示 80 个字符', '40：路径更短，长目录更早缩略'],
-  POWERLEVEL9K_DIR_MIN_COMMAND_COLUMNS: ['40：至少给命令输入区留 40 列', '20：路径可以占更多空间'],
-  POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD: ['3：超过 3 秒才显示耗时', '0：每条命令都显示耗时'],
-  POWERLEVEL9K_COMMAND_EXECUTION_TIME_PREFIX: ['took：显示为 took 8s', '耗时：显示为 耗时 8s'],
-  POWERLEVEL9K_TIME_FORMAT: ['%D{%H:%M:%S}：19:30:08', '%D{%H:%M}：19:30'],
-  POWERLEVEL9K_TIME_PREFIX: ['at：显示为 at 19:30:08', '时间：显示为 时间 19:30:08'],
-  POWERLEVEL9K_TRANSIENT_PROMPT: ['off：历史 prompt 保持完整', 'always：执行后把旧 prompt 简化'],
-  POWERLEVEL9K_INSTANT_PROMPT: ['verbose：启动快，有问题会提示', 'quiet：启动快，但少显示提示'],
-};
-
 const fallbackSettingsCatalog = [
   ['POWERLEVEL9K_PROMPT_ADD_NEWLINE', 'boolean', 'Prompt 前空一行'],
   ['POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR', 'string', '第一行填充字符'],
@@ -225,8 +212,8 @@ async function load() {
     backendMode = 'real';
     saveButton.disabled = false;
     saveButton.textContent = '保存配置';
-    executeCommandButton.disabled = false;
     selectDirButton.disabled = false;
+    terminalOpenButton.disabled = false;
     terminalStartButton.disabled = false;
     terminalStopButton.disabled = true;
     configPathInput.disabled = false;
@@ -234,9 +221,9 @@ async function load() {
     document.body.dataset.mode = 'real';
     document.querySelector('#config-path').textContent = `真实模式：正在编辑 ${state.path}`;
     configPathInput.value = state.path;
-    configHelp.textContent = '已连接本机后端。默认自动加载配置；手动修改路径后按回车或离开输入框会重新加载。';
-    previewNote.textContent = '真实模式：本机 zsh + Powerlevel10k 渲染。目录不会自动刷新。';
-    settingsNote.innerHTML = '这些参数会影响整体显示方式。每一项下面都有例子，保存后执行 <code>source ~/.p10k.zsh</code> 生效。';
+    configHelp.textContent = '已连接本机后端。修改路径后按回车或离开输入框会重新加载。';
+    previewNote.textContent = '真实渲染。目录不会自动刷新。';
+    settingsNote.innerHTML = '保存后执行 <code>source ~/.p10k.zsh</code> 或 <code>exec zsh</code> 生效。';
     if (!previewDirInput.value) {
       previewDirInput.value = state.home || state.path.replace(/\/\.p10k\.zsh$/, '');
     }
@@ -248,19 +235,19 @@ async function load() {
     state = previewState();
     saveButton.disabled = false;
     saveButton.textContent = '下载配置';
-    executeCommandButton.disabled = true;
     selectDirButton.disabled = true;
+    terminalOpenButton.disabled = true;
     terminalStartButton.disabled = true;
     terminalStopButton.disabled = true;
     document.body.dataset.mode = 'preview';
     document.querySelector('#config-path').textContent = '未连接本机后端。可以选择本地配置文件进行预览，并下载修改后的配置。';
     configPathInput.value = '~/.p10k.zsh';
     configPathInput.disabled = true;
-    configHelp.textContent = '浏览器不能自动扫描本机文件；请选择 .p10k.zsh 文件。未选择时使用内置示例配置。';
+    configHelp.textContent = '请选择 .p10k.zsh 文件。未选择时使用内置示例配置。';
     previewDirInput.value = '~';
     previewDirInput.disabled = true;
-    previewNote.textContent = '预览模式。选择配置文件后会按文件内容更新列表；保存时会下载修改后的文件。';
-    settingsNote.textContent = '这些参数会影响当前页面预览。选择配置文件后，可以下载修改后的配置。';
+    previewNote.textContent = '模拟渲染。';
+    settingsNote.textContent = '选择配置文件后，可以下载修改后的配置。';
     rawEl.textContent = '尚未选择配置文件。当前使用内置示例配置。';
     loadPreviewSnapshot();
   }
@@ -331,16 +318,11 @@ function loadPreviewSnapshot() {
   };
 }
 
-function previewCommandText() {
-  return previewCommandInput.value || '';
-}
-
 async function loadRealRender() {
   if (backendMode !== 'real') {
     realRender = { ansi: '', error: '' };
     return;
   }
-  showingExecution = false;
   realRender = await api(`api/render?dir=${encodeURIComponent(previewDirInput.value)}&columns=120`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -420,14 +402,10 @@ function renderList(side, container) {
     text.innerHTML = `
       <span class="segment-title"></span>
       <span class="segment-description"></span>
-      <span class="segment-example on"></span>
-      <span class="segment-example off"></span>
       <span class="segment-id"></span>
     `;
     text.querySelector('.segment-title').textContent = label;
     text.querySelector('.segment-description').textContent = description;
-    text.querySelector('.segment-example.on').textContent = `开启示例：${exampleFor(segment)[0]}`;
-    text.querySelector('.segment-example.off').textContent = `关闭效果：${exampleFor(segment)[1]}`;
     text.querySelector('.segment-id').textContent = `配置项：${segment}`;
 
     const controls = document.createElement('div');
@@ -442,10 +420,6 @@ function renderList(side, container) {
     row.append(checkbox, text, controls);
     container.append(row);
   }
-}
-
-function exampleFor(id) {
-  return segmentExamples[id] || [`显示 ${id}`, `不显示 ${id}`];
 }
 
 function controlButton(label, onClick) {
@@ -517,10 +491,7 @@ function renderSettings() {
       renderPreview();
       scheduleRealRender();
     });
-    const help = document.createElement('div');
-    help.className = 'setting-help';
-    help.textContent = (settingExamples[name] || ['修改这个参数会影响 prompt 显示', '保持原值则不改变这一项']).join('；');
-    wrap.append(labelEl, input, help);
+    wrap.append(labelEl, input);
     settingsEl.append(wrap);
   }
 }
@@ -669,13 +640,10 @@ function renderPreview() {
     const realHtml = realRender.error
       ? `<span class="ansi-error">${escapeHtml(realRender.error)}</span>`
       : ansiToHtml(realRender.ansi);
-    const realLabel = typeof realRender.exitCode === 'number'
-      ? `真实 zsh 执行结果（退出码 ${realRender.exitCode}）`
-      : '真实 zsh 渲染';
     realPromptEl.innerHTML = [
-      `<div class="preview-label">${escapeHtml(realLabel)}</div>`,
+      '<div class="preview-label">真实渲染</div>',
       realHtml || '<span class="ansi-error">暂无真实渲染输出</span>',
-      '<div class="preview-label preview-label-secondary">无真实环境时的虚拟预览</div>',
+      '<div class="preview-label preview-label-secondary">模拟渲染</div>',
       renderStaticPrompt(leftLines, rightLines, usesNewline),
     ].join('');
   } else {
@@ -696,7 +664,7 @@ function renderPreview() {
 }
 
 function renderStaticPrompt(leftLines, rightLines, usesNewline) {
-  const command = escapeHtml(previewCommandText());
+  const command = 'npm start';
   const left = leftLines.before.map((id) => staticSegment(id, 'left')).join('');
   const right = rightLines.before.slice(0, 8).map((id) => staticSegment(id, 'right')).join('');
   const gap = '<span class="static-gap">··································</span>';
@@ -840,42 +808,6 @@ async function save() {
   showMessage(`已保存。原文件备份到：${result.backupPath}`);
 }
 
-async function executePreviewCommand() {
-  hideMessage();
-  if (backendMode !== 'real') {
-    showMessage('只有本机真实模式可以执行测试命令。', true);
-    return;
-  }
-  const command = previewCommandText().trim();
-  if (!command) {
-    showMessage('请输入要执行的测试命令。', true);
-    return;
-  }
-  executeCommandButton.disabled = true;
-  executeCommandButton.textContent = '执行中...';
-  try {
-    realRender = await api(`api/execute?dir=${encodeURIComponent(previewDirInput.value)}&columns=120`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        configPath: configPathInput.value.trim(),
-        left: state.left,
-        right: state.right,
-        settings: state.settings,
-        command,
-      }),
-    });
-    showingExecution = true;
-    renderPreview();
-    showMessage(`测试命令执行完成，退出码：${realRender.exitCode}`);
-  } catch (err) {
-    showMessage(`测试命令执行失败：${err.message}`, true);
-  } finally {
-    executeCommandButton.disabled = false;
-    executeCommandButton.textContent = '执行测试命令';
-  }
-}
-
 async function loadConfigFromPath() {
   if (backendMode !== 'real') return;
   hideMessage();
@@ -976,13 +908,38 @@ function closeTerminalSocket() {
 
 function setTerminalButtons(running) {
   if (backendMode !== 'real') {
+    terminalOpenButton.disabled = true;
     terminalStartButton.disabled = true;
     terminalStopButton.disabled = true;
     return;
   }
-  terminalStartButton.disabled = running;
+  terminalOpenButton.disabled = false;
+  terminalStartButton.disabled = false;
   terminalStopButton.disabled = !running;
-  terminalStartButton.textContent = running ? '运行中' : '启动/重启交互 zsh';
+  terminalStartButton.textContent = running ? '重启' : '启动';
+}
+
+function terminalRunning() {
+  return terminalSocket
+    && (terminalSocket.readyState === WebSocket.OPEN || terminalSocket.readyState === WebSocket.CONNECTING);
+}
+
+function openTerminalDialog() {
+  hideMessage();
+  if (backendMode !== 'real') {
+    showMessage('只有本机真实模式可以打开交互 zsh。', true);
+    return;
+  }
+  if (!terminalDialog.open) {
+    terminalDialog.showModal();
+  }
+  ensureTerminal();
+  if (!terminalRunning()) startInteractiveTerminal();
+}
+
+function closeTerminalDialog() {
+  stopInteractiveTerminal();
+  if (terminalDialog.open) terminalDialog.close();
 }
 
 function startInteractiveTerminal() {
@@ -1080,12 +1037,16 @@ document.querySelector('#save').addEventListener('click', () => {
   save().catch((err) => showMessage(err.message, true));
 });
 
-executeCommandButton.addEventListener('click', () => {
-  executePreviewCommand().catch((err) => showMessage(err.message, true));
-});
-
 selectDirButton.addEventListener('click', () => {
   selectPreviewDirectory().catch((err) => showMessage(err.message, true));
+});
+
+terminalOpenButton.addEventListener('click', () => {
+  try {
+    openTerminalDialog();
+  } catch (err) {
+    showMessage(err.message, true);
+  }
 });
 
 terminalStartButton.addEventListener('click', () => {
@@ -1100,9 +1061,16 @@ terminalStopButton.addEventListener('click', () => {
   stopInteractiveTerminal();
 });
 
-previewCommandInput.addEventListener('input', () => {
-  document.querySelector('#preview-command-text').textContent = previewCommandText();
-  if (state) renderPreview();
+terminalCloseButton.addEventListener('click', () => {
+  closeTerminalDialog();
+});
+
+terminalDialog.addEventListener('cancel', () => {
+  stopInteractiveTerminal();
+});
+
+terminalDialog.addEventListener('close', () => {
+  if (terminalSocket) stopInteractiveTerminal();
 });
 
 configPathInput.addEventListener('change', () => {

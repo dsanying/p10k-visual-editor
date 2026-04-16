@@ -51,27 +51,10 @@
             <input id="preview-dir" type="text" spellcheck="false">
           </label>
           <button id="select-dir" type="button">选择目录</button>
-          <label class="preview-input">
-            测试命令
-            <input id="preview-command" type="text" spellcheck="false" value="npm start" placeholder="输入后点按钮，会真实执行">
-          </label>
-          <button id="execute-command" type="button">执行测试命令</button>
+          <button id="terminal-open" type="button">打开交互 zsh</button>
         </div>
         <div class="prompt-preview">
           <div id="real-prompt" class="real-prompt">读取中...</div>
-          <div class="terminal-panel">
-            <div class="terminal-toolbar">
-              <div>
-                <div class="preview-label">真实交互 zsh</div>
-                <p>启动后可以像普通 zsh 一样输入命令并回车执行。</p>
-              </div>
-              <div class="terminal-actions">
-                <button id="terminal-start" type="button">启动/重启交互 zsh</button>
-                <button id="terminal-stop" type="button">停止</button>
-              </div>
-            </div>
-            <div id="terminal"></div>
-          </div>
           <div class="prompt-row" id="preview-line-1">
             <span class="frame" id="preview-left-frame">╭─</span>
             <span id="left-preview" class="left-preview"></span>
@@ -81,12 +64,26 @@
           </div>
           <div class="prompt-row" id="preview-line-2">
             <span class="frame">╰─</span>
-            <span class="command" id="preview-command-text">npm start</span>
+            <span class="command">npm start</span>
             <span class="fill small">························</span>
             <span class="frame">─╯</span>
           </div>
         </div>
       </section>
+
+      <dialog id="terminal-dialog" class="terminal-dialog">
+        <div class="terminal-modal">
+          <div class="terminal-toolbar">
+            <div class="preview-label">交互 zsh</div>
+            <div class="terminal-actions">
+              <button id="terminal-start" type="button">启动</button>
+              <button id="terminal-stop" type="button">停止</button>
+              <button id="terminal-close" type="button">关闭</button>
+            </div>
+          </div>
+          <div id="terminal"></div>
+        </div>
+      </dialog>
 
       <section class="layout">
         <div class="panel">
@@ -104,7 +101,7 @@
 
       <section class="panel settings-panel">
         <h2>常用参数</h2>
-        <p id="settings-note">这些参数会影响整体显示方式。每一项下面都有例子，保存后执行 <code>source ~/.p10k.zsh</code> 生效。</p>
+        <p id="settings-note">保存后执行 <code>source ~/.p10k.zsh</code> 或 <code>exec zsh</code> 生效。</p>
         <div id="settings" class="settings-grid"></div>
       </section>
 

@@ -376,52 +376,6 @@ function renderPrompt(dirInput, columnsInput, configOverridePath) {
   }
 }
 
-function executeCommand(dirInput, columnsInput, configOverridePath, commandInput) {
-  const dir = dirInput ? resolveUserPath(dirInput) : process.cwd();
-  const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
-  const safeDir = exists ? dir : process.cwd();
-  const columns = Math.max(60, Math.min(240, Number(columnsInput || 120)));
-  const command = normalizeCommand(commandInput);
-  const scriptBody = [
-    `cd -- ${quoteForZsh(safeDir)} || exit 1`,
-    'zmodload zsh/datetime 2>/dev/null || true',
-    configOverridePath ? `source ${quoteForZsh(configOverridePath)}` : '',
-    `__p10k_editor_command=${quoteForZsh(command)}`,
-    'for f in $precmd_functions; do $f 2>/dev/null || true; done',
-    'print -rnP -- "${(e)PROMPT}"',
-    'print -r -- "$__p10k_editor_command"',
-    '__p10k_editor_start=$EPOCHREALTIME',
-    'eval "$__p10k_editor_command"',
-    '__p10k_editor_status=$?',
-    'typeset -gF P9K_COMMAND_DURATION_SECONDS=$((EPOCHREALTIME - __p10k_editor_start)) 2>/dev/null || true',
-    'if (( $+functions[_p9k_precmd_impl] )); then __p9k_new_status=$__p10k_editor_status; __p9k_new_pipestatus=($__p10k_editor_status); _p9k_precmd_impl 2>/dev/null || true; else ( exit $__p10k_editor_status ); for f in $precmd_functions; do $f 2>/dev/null || true; done; fi',
-    'print -rP -- "${(e)PROMPT}"',
-    'exit $__p10k_editor_status',
-  ].filter(Boolean).join('; ');
-  try {
-    const ansi = childProcess.execFileSync('script', ['-q', '/dev/null', 'zsh', '-ic', scriptBody], {
-      cwd: safeDir,
-      encoding: 'utf8',
-      env: shellEnv(columns),
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 15000,
-    });
-    return { dir: safeDir, requestedDir: dir, exists, columns, command, exitCode: 0, ansi: stripScriptNoise(ansi), error: '' };
-  } catch (err) {
-    const ansi = err.stdout ? String(err.stdout) : '';
-    return {
-      dir: safeDir,
-      requestedDir: dir,
-      exists,
-      columns,
-      command,
-      exitCode: typeof err.status === 'number' ? err.status : 1,
-      ansi: stripScriptNoise(ansi),
-      error: ansi ? '' : (err.message || 'zsh command failed'),
-    };
-  }
-}
-
 function shellEnv(columns) {
   return {
     ...process.env,
@@ -432,10 +386,6 @@ function shellEnv(columns) {
     SHELL_SESSION_DID_INIT: '1',
     TERM_SESSION_ID: '',
   };
-}
-
-function normalizeCommand(commandInput) {
-  return String(commandInput || '').replace(/\0/g, '').slice(0, 2000);
 }
 
 function buildConfig(input, original) {
@@ -464,17 +414,6 @@ function renderPromptWithConfig(dirInput, columnsInput, input) {
   fs.writeFileSync(tempPath, buildConfig(input, readConfig(configPath)));
   try {
     return renderPrompt(dirInput, columnsInput, tempPath);
-  } finally {
-    fs.rmSync(tempPath, { force: true });
-  }
-}
-
-function executeCommandWithConfig(dirInput, columnsInput, input) {
-  const configPath = resolveConfigPath(input.configPath);
-  const tempPath = path.join(os.tmpdir(), `p10k-editor-execute-${process.pid}-${Date.now()}.zsh`);
-  fs.writeFileSync(tempPath, buildConfig(input, readConfig(configPath)));
-  try {
-    return executeCommand(dirInput, columnsInput, tempPath, input.command);
   } finally {
     fs.rmSync(tempPath, { force: true });
   }
@@ -669,16 +608,6 @@ const server = http.createServer(async (req, res) => {
       const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
       const body = await readBody(req);
       writeJson(res, 200, renderPromptWithConfig(
-        requestUrl.searchParams.get('dir'),
-        requestUrl.searchParams.get('columns'),
-        JSON.parse(body)
-      ));
-      return;
-    }
-    if (req.method === 'POST' && req.url.startsWith('/api/execute')) {
-      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
-      const body = await readBody(req);
-      writeJson(res, 200, executeCommandWithConfig(
         requestUrl.searchParams.get('dir'),
         requestUrl.searchParams.get('columns'),
         JSON.parse(body)
