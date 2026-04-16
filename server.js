@@ -77,6 +77,8 @@ const segmentCatalog = [
   ['wifi', 'Wi-Fi', '显示 Wi-Fi 状态'],
 ];
 
+const segmentLabels = new Map(segmentCatalog.map(([id, label]) => [id, label]));
+
 const settingsCatalog = [
   ['POWERLEVEL9K_PROMPT_ADD_NEWLINE', 'boolean', 'Prompt 前空一行'],
   ['POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR', 'string', '第一行填充字符'],
@@ -152,16 +154,32 @@ function parseScalar(text, name) {
 
 function parseConfig(configPath = DEFAULT_CONFIG_PATH) {
   const text = readConfig(configPath);
-  const left = parseArray(text, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS')
-    .filter((item) => item.enabled)
-    .map((item) => item.id);
-  const right = parseArray(text, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS')
-    .filter((item) => item.enabled)
-    .map((item) => item.id);
+  const leftItems = parseArray(text, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS');
+  const rightItems = parseArray(text, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS');
+  const left = leftItems.filter((item) => item.enabled).map((item) => item.id);
+  const right = rightItems.filter((item) => item.enabled).map((item) => item.id);
   const settings = Object.fromEntries(
     settingsCatalog.map(([name]) => [name, parseScalar(text, name)])
   );
-  return { path: configPath, left, right, settings, catalog: segmentCatalog, settingsCatalog };
+  return {
+    path: configPath,
+    left,
+    right,
+    settings,
+    catalog: catalogWithConfigSegments(leftItems, rightItems),
+    settingsCatalog,
+  };
+}
+
+function catalogWithConfigSegments(...groups) {
+  const catalog = [...segmentCatalog];
+  const known = new Set(catalog.map(([id]) => id));
+  for (const item of groups.flat()) {
+    if (known.has(item.id)) continue;
+    known.add(item.id);
+    catalog.push([item.id, item.comment || item.id, '当前配置文件中的 Powerlevel10k 段']);
+  }
+  return catalog;
 }
 
 function runCommand(command, args, cwd) {
@@ -286,9 +304,14 @@ function quoteForZsh(value) {
 
 function stripScriptNoise(output) {
   return output
-    .replace(/^\x04\b\b/, '')
+    .replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, (sequence) => sequence.endsWith('m') ? sequence : '')
+    .replace(/^(?:\^D|\x04)?\x08+/, '')
+    .replace(/^(?:\^D|\x04)/, '')
+    .replace(/^Restored session:.*\n/gm, '')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
+    .replace(/^\n+/, '')
     .trimEnd();
 }
 
@@ -333,9 +356,8 @@ function buildConfig(input, original) {
   if (!Array.isArray(input.left) || !Array.isArray(input.right)) {
     throw new Error('left and right must be arrays');
   }
-  const valid = new Set(segmentCatalog.map(([id]) => id));
-  const left = input.left.filter((id) => valid.has(id));
-  const right = input.right.filter((id) => valid.has(id));
+  const left = input.left.filter(isSegmentId);
+  const right = input.right.filter(isSegmentId);
   let next = replaceArray(original, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS', left);
   next = replaceArray(next, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS', right);
   for (const [name, type] of settingsCatalog) {
@@ -344,6 +366,10 @@ function buildConfig(input, original) {
     }
   }
   return next;
+}
+
+function isSegmentId(id) {
+  return typeof id === 'string' && /^[a-zA-Z0-9_]+$/.test(id);
 }
 
 function renderPromptWithConfig(dirInput, columnsInput, input) {
@@ -361,13 +387,17 @@ function quoteZsh(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
-function renderArray(name, selected) {
+function renderArray(name, selected, sourceItems = []) {
   const selectedSet = new Set(selected);
   const selectedLines = selected.map((id) => `    ${id.padEnd(24)}# ${labelFor(id)}`);
-  const disabledLines = segmentCatalog
-    .map(([id]) => id)
+  const sourceLabels = new Map(sourceItems.map((item) => [item.id, item.comment]));
+  const disabledIds = uniqueIds([
+    ...sourceItems.map((item) => item.id),
+    ...segmentCatalog.map(([id]) => id),
+  ]);
+  const disabledLines = disabledIds
     .filter((id) => !selectedSet.has(id))
-    .map((id) => `    # ${id.padEnd(22)}# ${labelFor(id)}`);
+    .map((id) => `    # ${id.padEnd(22)}# ${sourceLabels.get(id) || labelFor(id)}`);
   return [
     `typeset -g ${name}=(`,
     ...selectedLines,
@@ -376,15 +406,23 @@ function renderArray(name, selected) {
   ].join('\n');
 }
 
+function uniqueIds(ids) {
+  const seen = new Set();
+  return ids.filter((id) => {
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 function labelFor(id) {
-  const found = segmentCatalog.find(([segment]) => segment === id);
-  return found ? found[1] : id;
+  return segmentLabels.get(id) || id;
 }
 
 function replaceArray(text, name, selected) {
   const pattern = new RegExp(`typeset -g ${name}=\\([\\s\\S]*?\\n  \\)`);
   if (!pattern.test(text)) throw new Error(`Cannot find ${name}`);
-  return text.replace(pattern, renderArray(name, selected));
+  return text.replace(pattern, renderArray(name, selected, parseArray(text, name)));
 }
 
 function normalizeValue(type, value) {
