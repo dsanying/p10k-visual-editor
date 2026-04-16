@@ -6,6 +6,8 @@ const http = require('http');
 const path = require('path');
 const os = require('os');
 const childProcess = require('child_process');
+const WebSocket = require('ws');
+const pty = require('@homebridge/node-pty-prebuilt-multiarch');
 
 const PORT = Number(process.env.PORT || 48731);
 const HOST = '127.0.0.1';
@@ -15,6 +17,8 @@ const STATIC_FILES = new Map([
   ['/index.html', 'index.html'],
   ['/app.js', 'app.js'],
   ['/style.css', 'style.css'],
+  ['/xterm/xterm.js', 'node_modules/@xterm/xterm/lib/xterm.js'],
+  ['/xterm/xterm.css', 'node_modules/@xterm/xterm/css/xterm.css'],
 ]);
 
 const segmentCatalog = [
@@ -476,6 +480,52 @@ function executeCommandWithConfig(dirInput, columnsInput, input) {
   }
 }
 
+function createInteractiveShell(input) {
+  const configPath = resolveConfigPath(input.configPath);
+  const dir = input.dir ? resolveUserPath(input.dir) : os.homedir();
+  const exists = fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+  const safeDir = exists ? dir : os.homedir();
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'p10k-editor-pty-'));
+  const tempConfigPath = path.join(tempDir, 'p10k.zsh');
+  const tempZshrcPath = path.join(tempDir, '.zshrc');
+  fs.writeFileSync(tempConfigPath, buildConfig(input, readConfig(configPath)));
+  fs.writeFileSync(tempZshrcPath, [
+    `[[ -f ${quoteZsh(path.join(os.homedir(), '.zshrc'))} ]] && source ${quoteZsh(path.join(os.homedir(), '.zshrc'))}`,
+    `source ${quoteZsh(tempConfigPath)}`,
+    `cd -- ${quoteZsh(safeDir)}`,
+    '',
+  ].join('\n'));
+  const columns = Math.max(60, Math.min(240, Number(input.columns || 120)));
+  const rows = Math.max(12, Math.min(80, Number(input.rows || 28)));
+  const shell = pty.spawn(process.env.SHELL || 'zsh', ['-i'], {
+    name: 'xterm-256color',
+    cols: columns,
+    rows,
+    cwd: safeDir,
+    env: {
+      ...shellEnv(columns),
+      ZDOTDIR: tempDir,
+      HOME: os.homedir(),
+    },
+  });
+  return { shell, tempDir };
+}
+
+function cleanupInteractiveShell(session) {
+  if (!session || session.cleaned) return;
+  session.cleaned = true;
+  try {
+    if (!session.exited) session.shell.kill();
+  } catch {}
+  fs.rmSync(session.tempDir, { recursive: true, force: true });
+}
+
+function sendTerminalMessage(ws, payload) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  }
+}
+
 function quoteZsh(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
@@ -650,6 +700,66 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     writeJson(res, 500, { ok: false, error: err.message });
   }
+});
+
+const terminalServer = new WebSocket.Server({ server, path: '/ws/terminal' });
+
+terminalServer.on('connection', (ws) => {
+  let session = null;
+
+  function stopSession(notify = false) {
+    const current = session;
+    session = null;
+    cleanupInteractiveShell(current);
+    if (notify) sendTerminalMessage(ws, { type: 'stopped' });
+  }
+
+  ws.on('message', (message) => {
+    try {
+      const payload = JSON.parse(String(message));
+      if (payload.type === 'start') {
+        stopSession(false);
+        const current = createInteractiveShell(payload);
+        session = current;
+        current.shell.onData((data) => {
+          sendTerminalMessage(ws, { type: 'data', data });
+        });
+        current.shell.onExit(({ exitCode, signal }) => {
+          current.exited = true;
+          cleanupInteractiveShell(current);
+          if (session === current) {
+            session = null;
+            sendTerminalMessage(ws, { type: 'exit', exitCode, signal });
+          }
+        });
+        sendTerminalMessage(ws, { type: 'started' });
+        return;
+      }
+      if (payload.type === 'data') {
+        if (session) session.shell.write(String(payload.data || ''));
+        return;
+      }
+      if (payload.type === 'resize') {
+        if (session) {
+          const columns = Math.max(60, Math.min(240, Number(payload.columns || 120)));
+          const rows = Math.max(12, Math.min(80, Number(payload.rows || 28)));
+          session.shell.resize(columns, rows);
+        }
+        return;
+      }
+      if (payload.type === 'stop') {
+        stopSession(true);
+        return;
+      }
+      throw new Error('未知终端消息类型');
+    } catch (err) {
+      sendTerminalMessage(ws, { type: 'error', message: err.message });
+    }
+  });
+
+  ws.on('close', () => {
+    stopSession(false);
+  });
 });
 
 server.listen(PORT, HOST, () => {

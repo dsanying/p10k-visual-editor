@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Powerlevel10k 配置编辑器</title>
+    <link rel="stylesheet" href="xterm/xterm.css">
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
@@ -58,6 +59,19 @@
         </div>
         <div class="prompt-preview">
           <div id="real-prompt" class="real-prompt">读取中...</div>
+          <div class="terminal-panel">
+            <div class="terminal-toolbar">
+              <div>
+                <div class="preview-label">真实交互 zsh</div>
+                <p>启动后可以像普通 zsh 一样输入命令并回车执行。</p>
+              </div>
+              <div class="terminal-actions">
+                <button id="terminal-start" type="button">启动/重启交互 zsh</button>
+                <button id="terminal-stop" type="button">停止</button>
+              </div>
+            </div>
+            <div id="terminal"></div>
+          </div>
           <div class="prompt-row" id="preview-line-1">
             <span class="frame" id="preview-left-frame">╭─</span>
             <span id="left-preview" class="left-preview"></span>
@@ -101,6 +115,7 @@
         </details>
       </section>
     </main>
+    <script src="xterm/xterm.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

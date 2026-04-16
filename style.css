@@ -250,6 +250,38 @@ button:disabled {
   color: #ff7b7b;
 }
 
+.terminal-panel {
+  margin-top: 14px;
+  border-top: 1px solid #344044;
+  padding-top: 12px;
+}
+
+.terminal-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.terminal-toolbar p {
+  color: #9aa5a8;
+  font-size: 13px;
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#terminal {
+  min-height: 360px;
+  border: 1px solid #344044;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+
 .static-prompt-row {
   display: flex;
   align-items: center;

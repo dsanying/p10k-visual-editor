@@ -1,12 +1,12 @@
 # Powerlevel10k Visual Editor
 
-本工具是一个本地 Web 编辑器，用来可视化编辑 `~/.p10k.zsh` 的常用配置，并通过本机 zsh + Powerlevel10k 在伪终端中真实渲染预览。
+本工具是一个本地 Web 编辑器，用来可视化编辑 `~/.p10k.zsh` 的常用配置，并通过本机 zsh + Powerlevel10k 在伪终端中真实渲染和交互执行命令。
 
 ## 运行模式
 
 本项目使用同一套前端自动切换两种模式：
 
-- 真实模式：本机运行 `npm start` 后，页面会连接 Node 后端，读取 `~/.p10k.zsh`，并调用本机 zsh + Powerlevel10k 真实渲染。
+- 真实模式：本机运行 `npm start` 后，页面会连接 Node 后端，读取 `~/.p10k.zsh`，并调用本机 zsh + Powerlevel10k 真实渲染；也可以启动交互 zsh，像普通终端一样输入命令并回车执行。
 - 静态预览模式：部署到 GitHub Pages 时没有后端，页面会自动降级为预览版。预览版可以勾选、排序和查看近似效果，但不能读取、保存或真实调用 zsh。
 
 ## GitHub Pages
@@ -33,7 +33,7 @@
 - zsh
 - Oh My Zsh
 - Powerlevel10k
-- macOS 上用于伪终端渲染的 `script` 命令
+- macOS 上用于单次真实渲染的 `script` 命令
 
 ## 快速安装
 
@@ -79,6 +79,7 @@ macOS 可以直接双击项目根目录里的 `start.command`。
 
 ```sh
 cd p10k-visual-editor
+npm install
 npm start
 ```
 
@@ -99,6 +100,7 @@ http://127.0.0.1:48731
 - 保存前自动备份原文件，备份名类似 `.p10k.zsh.p10k-editor.YYYYMMDDTHHMMSS.bak`
 - 可视化编辑左右 prompt 段、显示顺序和常用参数
 - 预览时会把当前界面上的未保存配置写入临时文件，并调用本机 zsh + Powerlevel10k 在伪终端中真实渲染
+- 交互 zsh 会使用同一份临时配置启动，输入命令并回车后会真实执行
 - 保存后在终端执行 `source ~/.p10k.zsh` 或 `exec zsh` 生效
 
 ## 开发检查

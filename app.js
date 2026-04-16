@@ -23,12 +23,17 @@ const configHelp = document.querySelector('#config-help');
 const previewCommandInput = document.querySelector('#preview-command');
 const executeCommandButton = document.querySelector('#execute-command');
 const selectDirButton = document.querySelector('#select-dir');
+const terminalStartButton = document.querySelector('#terminal-start');
+const terminalStopButton = document.querySelector('#terminal-stop');
+const terminalEl = document.querySelector('#terminal');
 let snapshot = { values: {} };
 let realRender = { ansi: '', error: '' };
 let renderTimer = null;
 let uploadedConfigText = '';
 let uploadedFileName = '.p10k.zsh';
 let showingExecution = false;
+let terminal = null;
+let terminalSocket = null;
 
 const segmentExamples = {
   newline: ['第一行显示路径，第二行输入命令', '所有内容尽量挤在同一行'],
@@ -222,6 +227,8 @@ async function load() {
     saveButton.textContent = '保存配置';
     executeCommandButton.disabled = false;
     selectDirButton.disabled = false;
+    terminalStartButton.disabled = false;
+    terminalStopButton.disabled = true;
     configPathInput.disabled = false;
     previewDirInput.disabled = false;
     document.body.dataset.mode = 'real';
@@ -243,6 +250,8 @@ async function load() {
     saveButton.textContent = '下载配置';
     executeCommandButton.disabled = true;
     selectDirButton.disabled = true;
+    terminalStartButton.disabled = true;
+    terminalStopButton.disabled = true;
     document.body.dataset.mode = 'preview';
     document.querySelector('#config-path').textContent = '未连接本机后端。可以选择本地配置文件进行预览，并下载修改后的配置。';
     configPathInput.value = '~/.p10k.zsh';
@@ -909,6 +918,142 @@ async function selectPreviewDirectory() {
   }
 }
 
+function terminalAvailable() {
+  return typeof window.Terminal === 'function' && terminalEl;
+}
+
+function ensureTerminal() {
+  if (!terminalAvailable()) {
+    throw new Error('终端组件未加载。请确认已安装依赖并通过 npm start 启动。');
+  }
+  if (terminal) return terminal;
+  terminal = new window.Terminal({
+    cols: 120,
+    rows: 28,
+    cursorBlink: true,
+    convertEol: true,
+    fontFamily: '"MesloLGS NF", "MesloLGS Nerd Font", ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 13,
+    theme: {
+      background: '#000000',
+      foreground: '#e7f0ef',
+      cursor: '#e7f0ef',
+    },
+  });
+  terminal.open(terminalEl);
+  terminal.onData((data) => {
+    if (terminalSocket && terminalSocket.readyState === WebSocket.OPEN) {
+      terminalSocket.send(JSON.stringify({ type: 'data', data }));
+    }
+  });
+  return terminal;
+}
+
+function terminalPayload() {
+  return {
+    type: 'start',
+    configPath: configPathInput.value.trim(),
+    left: state.left,
+    right: state.right,
+    settings: state.settings,
+    dir: previewDirInput.value,
+    columns: terminal ? terminal.cols : 120,
+    rows: terminal ? terminal.rows : 28,
+  };
+}
+
+function websocketUrl(path) {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}${path}`;
+}
+
+function closeTerminalSocket() {
+  if (!terminalSocket) return;
+  terminalSocket.onclose = null;
+  terminalSocket.close();
+  terminalSocket = null;
+}
+
+function setTerminalButtons(running) {
+  if (backendMode !== 'real') {
+    terminalStartButton.disabled = true;
+    terminalStopButton.disabled = true;
+    return;
+  }
+  terminalStartButton.disabled = running;
+  terminalStopButton.disabled = !running;
+  terminalStartButton.textContent = running ? '运行中' : '启动/重启交互 zsh';
+}
+
+function startInteractiveTerminal() {
+  hideMessage();
+  if (backendMode !== 'real') {
+    showMessage('只有本机真实模式可以启动交互 zsh。', true);
+    return;
+  }
+  const term = ensureTerminal();
+  closeTerminalSocket();
+  const socket = new WebSocket(websocketUrl('/ws/terminal'));
+  terminalSocket = socket;
+  terminalStartButton.disabled = true;
+  terminalStartButton.textContent = '启动中...';
+  terminalStopButton.disabled = false;
+  term.clear();
+  socket.addEventListener('open', () => {
+    socket.send(JSON.stringify(terminalPayload()));
+    term.focus();
+  });
+  socket.addEventListener('message', (event) => {
+    const payload = JSON.parse(event.data);
+    if (payload.type === 'started') {
+      setTerminalButtons(true);
+      return;
+    }
+    if (payload.type === 'data') {
+      term.write(payload.data);
+      return;
+    }
+    if (payload.type === 'error') {
+      showMessage(`交互 zsh 启动失败：${payload.message}`, true);
+      term.write(`\r\n${payload.message}\r\n`);
+      if (terminalSocket === socket) terminalSocket = null;
+      socket.close();
+      setTerminalButtons(false);
+      return;
+    }
+    if (payload.type === 'exit') {
+      term.write(`\r\n[zsh 已退出，退出码 ${payload.exitCode ?? '未知'}]\r\n`);
+      if (terminalSocket === socket) terminalSocket = null;
+      socket.close();
+      setTerminalButtons(false);
+      return;
+    }
+    if (payload.type === 'stopped') {
+      term.write('\r\n[zsh 已停止]\r\n');
+      if (terminalSocket === socket) terminalSocket = null;
+      socket.close();
+      setTerminalButtons(false);
+    }
+  });
+  socket.addEventListener('close', () => {
+    if (terminalSocket === socket) terminalSocket = null;
+    setTerminalButtons(false);
+  });
+  socket.addEventListener('error', () => {
+    showMessage('无法连接交互 zsh。请确认是通过 npm start 打开的本机页面。', true);
+    setTerminalButtons(false);
+  });
+}
+
+function stopInteractiveTerminal() {
+  if (terminalSocket && terminalSocket.readyState === WebSocket.OPEN) {
+    terminalSocket.send(JSON.stringify({ type: 'stop' }));
+  } else {
+    closeTerminalSocket();
+    setTerminalButtons(false);
+  }
+}
+
 function downloadConfig() {
   const source = uploadedConfigText || fallbackConfigText();
   const next = buildConfigText({
@@ -941,6 +1086,18 @@ executeCommandButton.addEventListener('click', () => {
 
 selectDirButton.addEventListener('click', () => {
   selectPreviewDirectory().catch((err) => showMessage(err.message, true));
+});
+
+terminalStartButton.addEventListener('click', () => {
+  try {
+    startInteractiveTerminal();
+  } catch (err) {
+    showMessage(err.message, true);
+  }
+});
+
+terminalStopButton.addEventListener('click', () => {
+  stopInteractiveTerminal();
 });
 
 previewCommandInput.addEventListener('input', () => {
