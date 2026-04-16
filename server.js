@@ -330,9 +330,11 @@ function stripScriptNoise(output) {
     .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, (sequence) => sequence.endsWith('m') ? sequence : '')
     .replace(/^(?:\^D|\x04)?\x08+/, '')
     .replace(/^(?:\^D|\x04)/, '')
-    .replace(/^Restored session:.*\n/gm, '')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
+    .replace(/^Restored session:[^\n]*(?:\n|$)/gm, '')
+    .replace(/^Saving session\.\.\.(?:completed\.)?(?:\n|$)/gm, '')
+    .replace(/Saving session\.\.\.completed\./g, '')
     .replace(/^\n+/, '')
     .trimEnd();
 }
@@ -357,6 +359,9 @@ function renderPrompt(dirInput, columnsInput, configOverridePath) {
         TERM: 'xterm-256color',
         COLUMNS: String(columns),
         POWERLEVEL9K_INSTANT_PROMPT: 'off',
+        SHELL_SESSIONS_DISABLE: '1',
+        SHELL_SESSION_DID_INIT: '1',
+        TERM_SESSION_ID: '',
       },
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 5000,
