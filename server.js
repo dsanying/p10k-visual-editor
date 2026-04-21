@@ -12,14 +12,7 @@ const pty = require('@homebridge/node-pty-prebuilt-multiarch');
 const PORT = Number(process.env.PORT || 48731);
 const HOST = '127.0.0.1';
 const DEFAULT_CONFIG_PATH = process.env.P10K_CONFIG || path.join(os.homedir(), '.p10k.zsh');
-const STATIC_FILES = new Map([
-  ['/', 'index.html'],
-  ['/index.html', 'index.html'],
-  ['/app.js', 'app.js'],
-  ['/style.css', 'style.css'],
-  ['/xterm/xterm.js', 'node_modules/@xterm/xterm/lib/xterm.js'],
-  ['/xterm/xterm.css', 'node_modules/@xterm/xterm/css/xterm.css'],
-]);
+const DIST_DIR = path.join(__dirname, 'dist');
 
 const segmentCatalog = [
   ['newline', '换到下一行', '让后面的内容显示到下一行'],
@@ -503,13 +496,16 @@ function selectDirectory() {
 
 function serveStatic(req, res) {
   const requestPath = decodeURIComponent(new URL(req.url, `http://${HOST}:${PORT}`).pathname);
-  const staticFile = STATIC_FILES.get(requestPath);
-  if (!staticFile) {
-    res.writeHead(404);
-    res.end('Not found');
+  const normalizedPath = requestPath === '/' ? '/index.html' : requestPath;
+  let filePath = path.join(DIST_DIR, normalizedPath);
+  if (!filePath.startsWith(DIST_DIR)) {
+    res.writeHead(403);
+    res.end('Forbidden');
     return;
   }
-  const filePath = path.join(__dirname, staticFile);
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    filePath = path.join(DIST_DIR, 'index.html');
+  }
   fs.readFile(filePath, (err, data) => {
     if (err) {
       res.writeHead(404);
@@ -517,7 +513,16 @@ function serveStatic(req, res) {
       return;
     }
     const ext = path.extname(filePath);
-    const type = ext === '.js' ? 'application/javascript' : ext === '.css' ? 'text/css' : 'text/html';
+    const types = {
+      '.js': 'application/javascript',
+      '.css': 'text/css',
+      '.html': 'text/html',
+      '.json': 'application/json',
+      '.svg': 'image/svg+xml',
+      '.woff2': 'font/woff2',
+      '.map': 'application/json',
+    };
+    const type = types[ext] || 'application/octet-stream';
     res.writeHead(200, { 'content-type': `${type}; charset=utf-8` });
     res.end(data);
   });

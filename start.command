@@ -29,7 +29,7 @@ echo "正在启动本地服务..."
 echo "关闭这个 Terminal 窗口会停止服务。"
 echo
 
-node server.js &
+npm start &
 server_pid=$!
 
 cleanup() {

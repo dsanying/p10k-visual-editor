@@ -8,8 +8,11 @@
     "p10k-visual-editor": "./server.js"
   },
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check server.js && node --check app.js"
+    "start": "npm run build && node server.js",
+    "serve": "node server.js",
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "check": "node --check server.js && vite build"
   },
   "keywords": [
     "powerlevel10k",
@@ -23,7 +26,15 @@
   },
   "dependencies": {
     "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "@mantine/core": "^9.0.2",
+    "@mantine/hooks": "^9.0.2",
+    "@mantine/notifications": "^9.0.2",
+    "@tabler/icons-react": "^3.41.1",
+    "@vitejs/plugin-react": "^6.0.1",
     "@xterm/xterm": "^6.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "vite": "^8.0.9",
     "ws": "^8.20.0"
   }
 }
