@@ -27,6 +27,7 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowDown, IconArrowUp, IconFolderOpen, IconRefresh, IconTerminal2, IconUpload } from '@tabler/icons-react';
+import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import {
   buildConfigText,
@@ -39,10 +40,7 @@ import {
   stateFromConfigText,
 } from './p10k.js';
 
-const promptColors = {
-  left: { bg: '#1c7ed6', color: '#fff' },
-  right: { bg: '#dee2e6', color: '#111' },
-};
+const PREVIEW_COLUMNS = 96;
 
 function api(path, options) {
   return fetch(path, options).then(async (res) => {
@@ -114,70 +112,96 @@ function previewValue(editorState, snapshot, id, label) {
 function gapFill(editorState) {
   const value = stringSetting(editorState, 'POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR', '·');
   if (!value.trim()) return '\u00a0';
-  return value[0].repeat(240);
+  return value[0];
 }
 
-function SegmentChip({ value, side }) {
-  return (
-    <Box
-      span="span"
-      style={{
-        display: 'inline-block',
-        padding: '4px 8px',
-        borderRadius: 6,
-        marginRight: 4,
-        background: promptColors[side].bg,
-        color: promptColors[side].color,
-        fontSize: 13,
-      }}
-    >
-      {value}
-    </Box>
-  );
+function buildPreviewLine({ prefix, left, right, filler, suffix, width }) {
+  const leftText = left.join(' ').trim();
+  const rightText = right.join(' ').trim();
+  const safeWidth = Math.max(40, width);
+  const frameWidth = prefix.length + suffix.length;
+  const contentWidth = Math.max(8, safeWidth - frameWidth);
+  if (!rightText) {
+    const raw = `${prefix}${leftText}`;
+    const trailing = Math.max(0, safeWidth - raw.length - suffix.length);
+    return `${raw}${' '.repeat(trailing)}${suffix}`;
+  }
+
+  const baseLeft = leftText || '';
+  const minimumGap = 1;
+  const fillerChar = (filler || ' ')[0];
+  const freeSpace = Math.max(minimumGap, contentWidth - baseLeft.length - rightText.length);
+  const gap = fillerChar.repeat(freeSpace);
+  return `${prefix}${baseLeft}${gap}${rightText}${suffix}`;
 }
 
-function PreviewPanel({ editorState, snapshot }) {
+function buildPreviewLines(editorState, snapshot) {
   const leftLines = splitByNewline(editorState.left);
   const rightLines = splitByNewline(editorState.right);
   const usesNewline = editorState.left.includes('newline') || editorState.right.includes('newline');
+  const commandSample = 'npm start';
+  const renderValues = (items) =>
+    items
+      .map((id) => {
+        const entry = editorState.catalog.find(([segment]) => segment === id);
+        const label = entry ? entry[1] : id;
+        return previewValue(editorState, snapshot, id, label);
+      })
+      .filter(Boolean)
+      .map(String);
+
   const leadingBlank = boolSetting(editorState, 'POWERLEVEL9K_PROMPT_ADD_NEWLINE');
-  const renderSegments = (items, side) =>
-    items.map((id) => {
-      const entry = editorState.catalog.find(([segment]) => segment === id);
-      const label = entry ? entry[1] : id;
-      const value = previewValue(editorState, snapshot, id, label);
-      return value ? <SegmentChip key={`${side}-${id}`} value={value} side={side} /> : null;
+  const topLine = buildPreviewLine({
+    prefix: usesNewline ? '╭─ ' : '',
+    left: renderValues(leftLines.before),
+    right: renderValues(rightLines.before),
+    filler: usesNewline ? gapFill(editorState) : ' ',
+    suffix: usesNewline ? ' ─╮' : '',
+    width: PREVIEW_COLUMNS,
+  });
+
+  if (!usesNewline) {
+    const oneLine = buildPreviewLine({
+      prefix: '',
+      left: [...renderValues(leftLines.before), commandSample],
+      right: renderValues(rightLines.before),
+      filler: ' ',
+      suffix: '',
+      width: PREVIEW_COLUMNS,
     });
-  const gap = (
-    <Text span c="dimmed" style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-      {gapFill(editorState)}
-    </Text>
-  );
+    return [leadingBlank ? '' : null, oneLine].filter((line) => line != null);
+  }
+
+  const bottomLine = buildPreviewLine({
+    prefix: '╰─ ',
+    left: [...renderValues(leftLines.after), commandSample],
+    right: renderValues(rightLines.after),
+    filler: ' ',
+    suffix: ' ─╯',
+    width: PREVIEW_COLUMNS,
+  });
+  return [leadingBlank ? '' : null, topLine, bottomLine].filter((line) => line != null);
+}
+
+function PreviewPanel({ editorState, snapshot }) {
+  const lines = buildPreviewLines(editorState, snapshot);
 
   return (
     <Paper bg="#111719" c="#e9ecef" p="md" radius="md">
-      <Stack gap={6}>
-        {leadingBlank ? <Box h={12} /> : null}
-        <Group gap={0} wrap="nowrap" align="center">
-          <Text c="dimmed">{usesNewline ? '╭─' : '─'}</Text>
-          {renderSegments(leftLines.before, 'left')}
-          {gap}
-          {renderSegments(rightLines.before, 'right')}
-          <Text c="dimmed">{usesNewline ? '─╮' : '─'}</Text>
-        </Group>
-        {usesNewline ? (
-          <Group gap={0} wrap="nowrap" align="center">
-            <Text c="dimmed">╰─</Text>
-            {renderSegments(leftLines.after, 'left')}
-            <Text span px="xs">
-              npm start
-            </Text>
-            {gap}
-            {renderSegments(rightLines.after, 'right')}
-            <Text c="dimmed">─╯</Text>
-          </Group>
-        ) : null}
-      </Stack>
+      <Box
+        component="pre"
+        style={{
+          margin: 0,
+          fontSize: 14,
+          lineHeight: 1.55,
+          whiteSpace: 'pre',
+          overflowX: 'auto',
+          fontFamily:
+            'ui-monospace, SFMono-Regular, SF Mono, Menlo, Monaco, Consolas, Liberation Mono, monospace',
+        }}
+      >
+        {lines.join('\n')}
+      </Box>
     </Paper>
   );
 }
@@ -193,7 +217,9 @@ function App() {
   const [uploadedName, setUploadedName] = useState('.p10k.zsh');
   const terminalHostRef = useRef(null);
   const terminalRef = useRef(null);
+  const fitAddonRef = useRef(null);
   const terminalSocketRef = useRef(null);
+  const resizeObserverRef = useRef(null);
   const syncTimerRef = useRef(null);
   const uploadedConfigRef = useRef('');
 
@@ -259,10 +285,21 @@ function App() {
     return () => {
       cancelled = true;
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      resizeObserverRef.current?.disconnect();
       stopTerminal();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!dialogOpen || !terminalRef.current) return undefined;
+    const timer = setTimeout(() => {
+      fitTerminal();
+      terminalRef.current?.focus();
+    }, 40);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogOpen]);
 
   useEffect(() => {
     if (!terminalSocketRef.current || terminalSocketRef.current.readyState !== WebSocket.OPEN) return;
@@ -293,14 +330,41 @@ function App() {
       fontSize: 13,
       theme: { background: '#000000', foreground: '#e9ecef', cursor: '#e9ecef' },
     });
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
     term.open(terminalHostRef.current);
+    fitAddonRef.current = fitAddon;
+    resizeObserverRef.current?.disconnect();
+    if (typeof ResizeObserver !== 'undefined' && terminalHostRef.current) {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        if (dialogOpen) fitTerminal();
+      });
+      resizeObserverRef.current.observe(terminalHostRef.current);
+    }
     term.onData((data) => {
       if (terminalSocketRef.current?.readyState === WebSocket.OPEN) {
         terminalSocketRef.current.send(JSON.stringify({ type: 'data', data }));
       }
     });
     terminalRef.current = term;
+    setTimeout(() => fitTerminal(), 0);
     return term;
+  }
+
+  function fitTerminal() {
+    const term = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+    if (!term || !fitAddon || !terminalHostRef.current) return;
+    fitAddon.fit();
+    if (terminalSocketRef.current?.readyState === WebSocket.OPEN) {
+      terminalSocketRef.current.send(
+        JSON.stringify({
+          type: 'resize',
+          columns: term.cols,
+          rows: term.rows,
+        })
+      );
+    }
   }
 
   function terminalRunning() {
@@ -323,6 +387,7 @@ function App() {
     const socket = new WebSocket(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/terminal`);
     terminalSocketRef.current = socket;
     socket.addEventListener('open', () => {
+      fitTerminal();
       socket.send(
         JSON.stringify({
           type: 'start',
@@ -341,6 +406,7 @@ function App() {
       const payload = JSON.parse(event.data);
       if (payload.type === 'data') term.write(payload.data);
       if (payload.type === 'error' && !silent) notifyError(`交互 zsh 启动失败：${payload.message}`);
+      if (payload.type === 'started' || payload.type === 'updated') setTimeout(() => fitTerminal(), 0);
     });
     socket.addEventListener('error', () => {
       if (!silent) notifyError('无法连接交互 zsh。');
@@ -729,8 +795,9 @@ function App() {
         opened={dialogOpen}
         onClose={() => setDialogOpen(false)}
         title="交互 zsh"
-        size="xl"
+        size="95vw"
         centered
+        styles={{ content: { maxWidth: 1400 }, body: { paddingTop: 0 } }}
       >
         <Stack gap="md">
           <Group justify="space-between">
@@ -748,8 +815,8 @@ function App() {
           <Box
             ref={terminalHostRef}
             style={{
-              minHeight: 420,
-              height: '68vh',
+              minHeight: 460,
+              height: '72vh',
               borderRadius: 8,
               overflow: 'hidden',
               border: '1px solid var(--mantine-color-default-border)',

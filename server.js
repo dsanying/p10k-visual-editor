@@ -374,8 +374,8 @@ function createInteractiveShell(input) {
     `cd -- ${quoteZsh(safeDir)}`,
     '',
   ].join('\n'));
-  const columns = Math.max(60, Math.min(240, Number(input.columns || 120)));
-  const rows = Math.max(12, Math.min(80, Number(input.rows || 28)));
+  const columns = Math.max(20, Math.min(240, Number(input.columns || 120)));
+  const rows = Math.max(8, Math.min(80, Number(input.rows || 28)));
   const shell = pty.spawn(process.env.SHELL || 'zsh', ['-i'], {
     name: 'xterm-256color',
     cols: columns,
@@ -616,8 +616,8 @@ terminalServer.on('connection', (ws) => {
       }
       if (payload.type === 'resize') {
         if (session) {
-          const columns = Math.max(60, Math.min(240, Number(payload.columns || 120)));
-          const rows = Math.max(12, Math.min(80, Number(payload.rows || 28)));
+          const columns = Math.max(20, Math.min(240, Number(payload.columns || 120)));
+          const rows = Math.max(8, Math.min(80, Number(payload.rows || 28)));
           session.shell.resize(columns, rows);
         }
         return;
