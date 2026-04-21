@@ -41,6 +41,10 @@ import {
 } from './p10k.js';
 
 const PREVIEW_COLUMNS = 96;
+const PREVIEW_SEGMENT_STYLES = {
+  left: { background: 'var(--mantine-color-blue-6)', color: 'var(--mantine-color-white)' },
+  right: { background: 'var(--mantine-color-gray-2)', color: 'var(--mantine-color-dark-8)' },
+};
 
 function api(path, options) {
   return fetch(path, options).then(async (res) => {
@@ -115,24 +119,41 @@ function gapFill(editorState) {
   return value[0];
 }
 
+function createSegmentToken(text, side) {
+  return {
+    kind: 'segment',
+    text: String(text),
+    side,
+    width: String(text).length + 3,
+  };
+}
+
+function createTextToken(text) {
+  return {
+    kind: 'text',
+    text: String(text),
+    width: String(text).length,
+  };
+}
+
 function buildPreviewLine({ prefix, left, right, filler, suffix, width }) {
-  const leftText = left.join(' ').trim();
-  const rightText = right.join(' ').trim();
+  const leftTokens = left.map((item) => (typeof item === 'string' ? createTextToken(item) : item));
+  const rightTokens = right.map((item) => (typeof item === 'string' ? createTextToken(item) : item));
+  const leftWidth = leftTokens.reduce((sum, token) => sum + token.width, 0);
+  const rightWidth = rightTokens.reduce((sum, token) => sum + token.width, 0);
   const safeWidth = Math.max(40, width);
   const frameWidth = prefix.length + suffix.length;
   const contentWidth = Math.max(8, safeWidth - frameWidth);
-  if (!rightText) {
-    const raw = `${prefix}${leftText}`;
-    const trailing = Math.max(0, safeWidth - raw.length - suffix.length);
-    return `${raw}${' '.repeat(trailing)}${suffix}`;
-  }
-
-  const baseLeft = leftText || '';
   const minimumGap = 1;
   const fillerChar = (filler || ' ')[0];
-  const freeSpace = Math.max(minimumGap, contentWidth - baseLeft.length - rightText.length);
-  const gap = fillerChar.repeat(freeSpace);
-  return `${prefix}${baseLeft}${gap}${rightText}${suffix}`;
+  const freeSpace = Math.max(minimumGap, contentWidth - leftWidth - rightWidth);
+  return {
+    prefix,
+    left: leftTokens,
+    gap: fillerChar.repeat(freeSpace),
+    right: rightTokens,
+    suffix,
+  };
 }
 
 function buildPreviewLines(editorState, snapshot) {
@@ -140,21 +161,21 @@ function buildPreviewLines(editorState, snapshot) {
   const rightLines = splitByNewline(editorState.right);
   const usesNewline = editorState.left.includes('newline') || editorState.right.includes('newline');
   const commandSample = 'npm start';
-  const renderValues = (items) =>
+  const renderValues = (items, side) =>
     items
       .map((id) => {
         const entry = editorState.catalog.find(([segment]) => segment === id);
         const label = entry ? entry[1] : id;
-        return previewValue(editorState, snapshot, id, label);
+        const value = previewValue(editorState, snapshot, id, label);
+        return value ? createSegmentToken(value, side) : null;
       })
-      .filter(Boolean)
-      .map(String);
+      .filter(Boolean);
 
   const leadingBlank = boolSetting(editorState, 'POWERLEVEL9K_PROMPT_ADD_NEWLINE');
   const topLine = buildPreviewLine({
     prefix: usesNewline ? '╭─ ' : '',
-    left: renderValues(leftLines.before),
-    right: renderValues(rightLines.before),
+    left: renderValues(leftLines.before, 'left'),
+    right: renderValues(rightLines.before, 'right'),
     filler: usesNewline ? gapFill(editorState) : ' ',
     suffix: usesNewline ? ' ─╮' : '',
     width: PREVIEW_COLUMNS,
@@ -163,8 +184,8 @@ function buildPreviewLines(editorState, snapshot) {
   if (!usesNewline) {
     const oneLine = buildPreviewLine({
       prefix: '',
-      left: [...renderValues(leftLines.before), commandSample],
-      right: renderValues(rightLines.before),
+      left: [...renderValues(leftLines.before, 'left'), createTextToken(commandSample)],
+      right: renderValues(rightLines.before, 'right'),
       filler: ' ',
       suffix: '',
       width: PREVIEW_COLUMNS,
@@ -174,8 +195,8 @@ function buildPreviewLines(editorState, snapshot) {
 
   const bottomLine = buildPreviewLine({
     prefix: '╰─ ',
-    left: [...renderValues(leftLines.after), commandSample],
-    right: renderValues(rightLines.after),
+    left: [...renderValues(leftLines.after, 'left'), createTextToken(commandSample)],
+    right: renderValues(rightLines.after, 'right'),
     filler: ' ',
     suffix: ' ─╯',
     width: PREVIEW_COLUMNS,
@@ -185,23 +206,53 @@ function buildPreviewLines(editorState, snapshot) {
 
 function PreviewPanel({ editorState, snapshot }) {
   const lines = buildPreviewLines(editorState, snapshot);
+  const renderToken = (token, index) => {
+    if (token.kind === 'segment') {
+      return (
+        <Box
+          key={index}
+          component="span"
+          px={6}
+          mr={4}
+          style={{
+            display: 'inline-block',
+            borderRadius: 4,
+            ...PREVIEW_SEGMENT_STYLES[token.side],
+          }}
+        >
+          {token.text}
+        </Box>
+      );
+    }
+    return <React.Fragment key={index}>{token.text}</React.Fragment>;
+  };
 
   return (
     <Paper bg="#111719" c="#e9ecef" p="md" radius="md">
-      <Box
-        component="pre"
+      <Stack gap={0}
         style={{
-          margin: 0,
           fontSize: 14,
           lineHeight: 1.55,
-          whiteSpace: 'pre',
-          overflowX: 'auto',
           fontFamily:
             'ui-monospace, SFMono-Regular, SF Mono, Menlo, Monaco, Consolas, Liberation Mono, monospace',
         }}
       >
-        {lines.join('\n')}
-      </Box>
+        {lines.map((line, lineIndex) =>
+          line === '' ? (
+            <Box key={lineIndex} h={18} />
+          ) : (
+            <ScrollArea key={lineIndex} type="never" offsetScrollbars={false}>
+              <Box component="div" style={{ whiteSpace: 'pre', minWidth: 'max-content' }}>
+                {line.prefix}
+                {line.left.map(renderToken)}
+                {line.gap}
+                {line.right.map(renderToken)}
+                {line.suffix}
+              </Box>
+            </ScrollArea>
+          )
+        )}
+      </Stack>
     </Paper>
   );
 }
