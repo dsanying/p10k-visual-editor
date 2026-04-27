@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Accordion,
   ActionIcon,
   AppShell,
   Badge,
@@ -9,11 +10,9 @@ import {
   Checkbox,
   Code,
   Container,
-  Divider,
   FileButton,
   Grid,
   Group,
-  Input,
   Modal,
   NumberInput,
   Paper,
@@ -228,7 +227,7 @@ function PreviewPanel({ editorState, snapshot }) {
   };
 
   return (
-    <Paper bg="#111719" c="#e9ecef" p="md" radius="md">
+    <Box bg="#111719" c="#e9ecef" p="md" style={{ borderRadius: 8 }}>
       <Stack gap={0}
         style={{
           fontSize: 14,
@@ -253,7 +252,23 @@ function PreviewPanel({ editorState, snapshot }) {
           )
         )}
       </Stack>
-    </Paper>
+    </Box>
+  );
+}
+
+function SectionHeading({ title, description, right }) {
+  return (
+    <Group justify="space-between" align="end">
+      <Stack gap={2}>
+        <Title order={3}>{title}</Title>
+        {description ? (
+          <Text c="dimmed" size="sm">
+            {description}
+          </Text>
+        ) : null}
+      </Stack>
+      {right}
+    </Group>
   );
 }
 
@@ -281,6 +296,9 @@ function App() {
 
   const notify = (message, color = 'teal') => notifications.show({ message, color });
   const notifyError = (message) => notifications.show({ message, color: 'red' });
+  const leftEnabledCount = editorState.left.length;
+  const rightEnabledCount = editorState.right.length;
+  const usesRealMode = mode === 'real';
 
   async function loadSnapshot(nextDir, nextMode = mode) {
     if (nextMode !== 'real') {
@@ -603,10 +621,24 @@ function App() {
       const info = catalogMap.get(id) || { label: id, description: '' };
       const index = editorState[side].indexOf(id);
       return (
-        <Card key={`${side}-${id}`} withBorder radius="md" shadow="xs" opacity={enabled ? 1 : 0.58}>
-          <Stack gap="xs">
-            <Group justify="space-between" align="start">
-              <Checkbox checked={enabled} onChange={(event) => toggleSegment(side, id, event.currentTarget.checked)} label={info.label} />
+        <Card
+          key={`${side}-${id}`}
+          withBorder
+          radius="md"
+          padding="sm"
+          shadow="xs"
+          style={{
+            opacity: enabled ? 1 : 0.56,
+            background: enabled ? 'var(--mantine-color-body)' : 'var(--mantine-color-gray-0)',
+          }}
+        >
+          <Stack gap={8}>
+            <Group justify="space-between" align="start" wrap="nowrap">
+              <Checkbox
+                checked={enabled}
+                onChange={(event) => toggleSegment(side, id, event.currentTarget.checked)}
+                label={info.label}
+              />
               <Group gap={4}>
                 <ActionIcon variant="light" disabled={index <= 0} onClick={() => moveSegment(side, id, -1)}>
                   <IconArrowUp size={16} />
@@ -620,10 +652,17 @@ function App() {
                 </ActionIcon>
               </Group>
             </Group>
-            <Text size="sm" c="dimmed">
-              {info.description}
-            </Text>
-            <Code>{id}</Code>
+            <Group gap={6}>
+              <Code>{id}</Code>
+              <Badge variant="light" color={side === 'left' ? 'blue' : 'gray'}>
+                {side === 'left' ? '左侧' : '右侧'}
+              </Badge>
+            </Group>
+            {info.description ? (
+              <Text size="sm" c="dimmed" lineClamp={2}>
+                {info.description}
+              </Text>
+            ) : null}
           </Stack>
         </Card>
       );
@@ -635,208 +674,227 @@ function App() {
       <AppShell header={{ height: 0 }} padding="md">
         <AppShell.Main>
           <Container size={1440}>
-            <Stack gap="md">
-              <Group justify="space-between" align="start">
-                <Stack gap={4}>
-                  <Title order={1}>Powerlevel10k 配置编辑器</Title>
-                  <Text c="dimmed">组件化界面，尽量减少自定义样式。</Text>
-                  <Group gap="xs">
-                    <Badge color={mode === 'real' ? 'teal' : 'gray'}>{mode === 'real' ? '真实模式' : '预览模式'}</Badge>
+            <Stack gap="lg">
+              <Paper
+                withBorder
+                radius="md"
+                p="lg"
+                style={{ background: 'linear-gradient(180deg, #f7faf8 0%, #ffffff 100%)' }}
+              >
+                <Group justify="space-between" align="start">
+                  <Stack gap={6}>
+                    <Title order={1}>Powerlevel10k 配置编辑器</Title>
+                    <Group gap="xs">
+                      <Badge color={usesRealMode ? 'teal' : 'gray'}>{usesRealMode ? '真实模式' : '预览模式'}</Badge>
+                      <Badge variant="light" color="blue">{leftEnabledCount} 个左侧段</Badge>
+                      <Badge variant="light" color="gray">{rightEnabledCount} 个右侧段</Badge>
+                    </Group>
                     <Text c="dimmed" size="sm">
-                      {mode === 'real' ? `正在编辑 ${editorState.path}` : '未连接本机后端'}
+                      {usesRealMode ? `正在编辑 ${editorState.path}` : '当前未连接本机后端'}
                     </Text>
+                  </Stack>
+                  <Group>
+                    <Button variant="default" leftSection={<IconRefresh size={16} />} onClick={() => handlePathReload()}>
+                      重新读取
+                    </Button>
+                    <Button onClick={saveConfig}>保存配置</Button>
                   </Group>
-                </Stack>
-                <Group>
-                  <Button variant="default" leftSection={<IconRefresh size={16} />} onClick={() => handlePathReload()}>
-                    重新读取
-                  </Button>
-                  <Button onClick={saveConfig}>保存配置</Button>
                 </Group>
-              </Group>
-
-              <Paper withBorder radius="md" p="md">
-                <Grid align="end">
-                  <Grid.Col span={{ base: 12, md: 6 }}>
-                    <TextInput
-                      label="配置路径"
-                      value={configPath}
-                      disabled={mode !== 'real'}
-                      onChange={(event) => setConfigPath(event.currentTarget.value)}
-                      onBlur={handlePathReload}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') event.currentTarget.blur();
-                      }}
-                    />
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 12, md: 3 }}>
-                    <FileButton onChange={handleFile} accept=".zsh,.txt,text/plain">
-                      {(props) => (
-                        <Button {...props} variant="default" fullWidth leftSection={<IconUpload size={16} />}>
-                          选择文件
-                        </Button>
-                      )}
-                    </FileButton>
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 12, md: 3 }}>
-                    <Text c="dimmed" size="sm">
-                      {mode === 'real' ? '修改路径后按回车或离开输入框会重新加载。' : '选择 .p10k.zsh 文件后使用预览模式编辑。'}
-                    </Text>
-                  </Grid.Col>
-                </Grid>
               </Paper>
 
-              <Paper withBorder radius="md" p="md" pos="sticky" top={12} style={{ zIndex: 10 }}>
-                <Grid align="end">
-                  <Grid.Col span={{ base: 12, md: 6 }}>
-                    <TextInput
-                      label="预览目录"
-                      value={previewDir}
-                      disabled={mode !== 'real'}
-                      onChange={(event) => setPreviewDir(event.currentTarget.value)}
-                      onBlur={handlePreviewDirBlur}
-                    />
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 12, md: 3 }}>
-                    <Button
-                      variant="default"
-                      fullWidth
-                      disabled={mode !== 'real'}
-                      leftSection={<IconFolderOpen size={16} />}
-                      onClick={handleSelectDir}
-                    >
-                      选择目录
-                    </Button>
-                  </Grid.Col>
-                  <Grid.Col span={{ base: 12, md: 3 }}>
-                    <Button
-                      fullWidth
-                      disabled={mode !== 'real'}
-                      leftSection={<IconTerminal2 size={16} />}
-                      onClick={() => {
-                        setDialogOpen(true);
-                        setTimeout(() => {
-                          if (!terminalRunning()) startTerminal();
-                          else terminalRef.current?.focus();
-                        }, 0);
-                      }}
-                    >
-                      打开交互 zsh
-                    </Button>
-                  </Grid.Col>
-                </Grid>
-                <Box mt="md">
-                  <PreviewPanel editorState={editorState} snapshot={snapshot} />
-                </Box>
+              <Paper withBorder radius="md" p="lg" pos="sticky" top={12} style={{ zIndex: 10 }}>
+                <Stack gap="lg">
+                  <SectionHeading
+                    title="预览工作台"
+                    description="先看 prompt 排布，再调整段位和参数。"
+                    right={
+                      <Group gap="xs">
+                        <Badge variant="light" color="teal">{usesRealMode ? '可保存' : '仅预览'}</Badge>
+                        <Badge variant="dot" color="gray">{previewDir}</Badge>
+                      </Group>
+                    }
+                  />
+                  <Grid gutter="lg" align="start">
+                    <Grid.Col span={{ base: 12, xl: 8 }}>
+                      <PreviewPanel editorState={editorState} snapshot={snapshot} />
+                    </Grid.Col>
+                    <Grid.Col span={{ base: 12, xl: 4 }}>
+                      <Stack gap="sm">
+                        <TextInput
+                          label="配置路径"
+                          value={configPath}
+                          disabled={!usesRealMode}
+                          onChange={(event) => setConfigPath(event.currentTarget.value)}
+                          onBlur={handlePathReload}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') event.currentTarget.blur();
+                          }}
+                        />
+                        <TextInput
+                          label="预览目录"
+                          value={previewDir}
+                          disabled={!usesRealMode}
+                          onChange={(event) => setPreviewDir(event.currentTarget.value)}
+                          onBlur={handlePreviewDirBlur}
+                        />
+                        <SimpleGrid cols={2} spacing="sm">
+                          <FileButton onChange={handleFile} accept=".zsh,.txt,text/plain">
+                            {(props) => (
+                              <Button {...props} variant="default" fullWidth leftSection={<IconUpload size={16} />}>
+                                选择文件
+                              </Button>
+                            )}
+                          </FileButton>
+                          <Button
+                            variant="default"
+                            fullWidth
+                            disabled={!usesRealMode}
+                            leftSection={<IconFolderOpen size={16} />}
+                            onClick={handleSelectDir}
+                          >
+                            选择目录
+                          </Button>
+                        </SimpleGrid>
+                        <Button
+                          fullWidth
+                          disabled={!usesRealMode}
+                          leftSection={<IconTerminal2 size={16} />}
+                          onClick={() => {
+                            setDialogOpen(true);
+                            setTimeout(() => {
+                              if (!terminalRunning()) startTerminal();
+                              else terminalRef.current?.focus();
+                            }, 0);
+                          }}
+                        >
+                          打开交互 zsh
+                        </Button>
+                        <Text c="dimmed" size="sm">
+                          {usesRealMode ? '路径或目录改完后离开输入框会自动重读。' : '可导入 .p10k.zsh 文件做模拟编辑。'}
+                        </Text>
+                      </Stack>
+                    </Grid.Col>
+                  </Grid>
+                </Stack>
               </Paper>
 
               <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-                <Paper withBorder radius="md" p="md">
+                <Paper withBorder radius="md" p="lg">
                   <Stack gap="md">
-                    <div>
-                      <Title order={3}>左侧显示</Title>
-                      <Text c="dimmed" size="sm">
-                        适合放路径、Git、换行等核心信息。
-                      </Text>
-                    </div>
-                    <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="sm">
+                    <SectionHeading
+                      title="左侧显示"
+                      description="路径、Git、换行等主要信息。"
+                      right={<Badge variant="light" color="blue">{leftEnabledCount} / {editorState.leftOrder.length}</Badge>}
+                    />
+                    <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="sm">
                       {segmentCards('left')}
                     </SimpleGrid>
                   </Stack>
                 </Paper>
 
-                <Paper withBorder radius="md" p="md">
+                <Paper withBorder radius="md" p="lg">
                   <Stack gap="md">
-                    <div>
-                      <Title order={3}>右侧显示</Title>
-                      <Text c="dimmed" size="sm">
-                        适合放状态、耗时、版本、时间等辅助信息。
-                      </Text>
-                    </div>
-                    <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="sm">
+                    <SectionHeading
+                      title="右侧显示"
+                      description="状态、耗时、版本、时间等辅助信息。"
+                      right={<Badge variant="light" color="gray">{rightEnabledCount} / {editorState.rightOrder.length}</Badge>}
+                    />
+                    <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="sm">
                       {segmentCards('right')}
                     </SimpleGrid>
                   </Stack>
                 </Paper>
               </SimpleGrid>
 
-              <Paper withBorder radius="md" p="md">
-                <Stack gap="md">
-                  <div>
-                    <Title order={3}>常用参数</Title>
+              <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md">
+                <Paper withBorder radius="md" p="lg">
+                  <Stack gap="md">
+                    <SectionHeading
+                      title="常用参数"
+                      description="直接改常用开关和格式。"
+                    />
                     <Text c="dimmed" size="sm">
                       保存后执行 <Code>source ~/.p10k.zsh</Code> 或 <Code>exec zsh</Code> 生效。
                     </Text>
-                  </div>
-                  <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-                    {editorState.settingsCatalog.map(([name, type, label]) => {
-                      if (type === 'number') {
+                    <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                      {editorState.settingsCatalog.map(([name, type, label]) => {
+                        if (type === 'number') {
+                          return (
+                            <NumberInput
+                              key={name}
+                              label={label}
+                              value={Number(editorState.settings[name] || 0)}
+                              onChange={(value) =>
+                                setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: String(value || 0) } }))
+                              }
+                            />
+                          );
+                        }
+                        if (type === 'boolean' || name === 'POWERLEVEL9K_TRANSIENT_PROMPT' || name === 'POWERLEVEL9K_INSTANT_PROMPT') {
+                          const data = type === 'boolean'
+                            ? ['true', 'false']
+                            : name === 'POWERLEVEL9K_TRANSIENT_PROMPT'
+                              ? ['off', 'always', 'same-dir']
+                              : ['verbose', 'quiet', 'off'];
+                          return (
+                            <Select
+                              key={name}
+                              label={label}
+                              data={data}
+                              value={editorState.settings[name] || data[0]}
+                              onChange={(value) =>
+                                setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: value || '' } }))
+                              }
+                            />
+                          );
+                        }
                         return (
-                          <NumberInput
+                          <TextInput
                             key={name}
                             label={label}
-                            value={Number(editorState.settings[name] || 0)}
-                            onChange={(value) =>
-                              setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: String(value || 0) } }))
+                            value={editorState.settings[name] || ''}
+                            onChange={(event) =>
+                              setEditorState((current) => ({
+                                ...current,
+                                settings: { ...current.settings, [name]: event.currentTarget.value },
+                              }))
                             }
                           />
                         );
-                      }
-                      if (type === 'boolean' || name === 'POWERLEVEL9K_TRANSIENT_PROMPT' || name === 'POWERLEVEL9K_INSTANT_PROMPT') {
-                        const data = type === 'boolean'
-                          ? ['true', 'false']
-                          : name === 'POWERLEVEL9K_TRANSIENT_PROMPT'
-                            ? ['off', 'always', 'same-dir']
-                            : ['verbose', 'quiet', 'off'];
-                        return (
-                          <Select
-                            key={name}
-                            label={label}
-                            data={data}
-                            value={editorState.settings[name] || data[0]}
-                            onChange={(value) =>
-                              setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: value || '' } }))
-                            }
-                          />
-                        );
-                      }
-                      return (
-                        <TextInput
-                          key={name}
-                          label={label}
-                          value={editorState.settings[name] || ''}
-                          onChange={(event) =>
-                            setEditorState((current) => ({
-                              ...current,
-                              settings: { ...current.settings, [name]: event.currentTarget.value },
-                            }))
-                          }
-                        />
-                      );
-                    })}
-                  </SimpleGrid>
-                </Stack>
-              </Paper>
+                      })}
+                    </SimpleGrid>
+                  </Stack>
+                </Paper>
 
-              <Paper withBorder radius="md" p="md">
-                <Stack gap="sm">
-                  <Title order={3}>原始配置</Title>
-                  <Box
-                    component="pre"
-                    style={{
-                      margin: 0,
-                      padding: 16,
-                      borderRadius: 8,
-                      background: '#111719',
-                      color: '#e9ecef',
-                      overflow: 'auto',
-                      maxHeight: 420,
-                    }}
-                  >
-                    {rawConfig}
-                  </Box>
-                </Stack>
-              </Paper>
+                <Paper withBorder radius="md" p="lg">
+                  <Accordion variant="separated" radius="md" defaultValue="raw-config">
+                    <Accordion.Item value="raw-config">
+                      <Accordion.Control>
+                        <SectionHeading
+                          title="原始配置"
+                          description="需要时再展开查看完整内容。"
+                        />
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <Box
+                          component="pre"
+                          style={{
+                            margin: 0,
+                            padding: 16,
+                            borderRadius: 8,
+                            background: '#111719',
+                            color: '#e9ecef',
+                            overflow: 'auto',
+                            maxHeight: 420,
+                          }}
+                        >
+                          {rawConfig}
+                        </Box>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  </Accordion>
+                </Paper>
+              </SimpleGrid>
             </Stack>
           </Container>
         </AppShell.Main>
