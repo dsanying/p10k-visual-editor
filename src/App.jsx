@@ -24,6 +24,7 @@ import {
   Text,
   TextInput,
   Title,
+  Tooltip,
 } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -32,6 +33,7 @@ import {
   IconArrowUp,
   IconFolderOpen,
   IconMoon,
+  IconHelpCircle,
   IconRefresh,
   IconSun,
   IconTerminal2,
@@ -131,6 +133,18 @@ const UI_TEXT = {
     readConfigFile: (name) => `已读取配置文件：${name}`,
     fileSelectedNotice: '已选择文件。真实模式下请把目标路径填到“配置路径”。',
     sourcePlaceholder: '尚未选择配置文件。当前使用内置示例配置。',
+    transientPromptHelpTitle: '瞬态提示',
+    transientPromptHelp: [
+      ['关闭', '始终保留完整 prompt。'],
+      ['始终简化', '执行过命令后，把旧 prompt 压缩成更短样式。'],
+      ['同目录时简化', '目录没变时才压缩，目录变化后保留完整 prompt。'],
+    ],
+    instantPromptHelpTitle: '即时提示',
+    instantPromptHelp: [
+      ['完整', '启动 shell 时尽量提前显示 prompt，信息最完整。'],
+      ['静默', '减少启动时的提示输出，更干净。'],
+      ['关闭', '不使用 instant prompt。'],
+    ],
   },
   en: {
     appTitle: 'Powerlevel10k Config Editor',
@@ -176,6 +190,18 @@ const UI_TEXT = {
     readConfigFile: (name) => `Loaded config file: ${name}`,
     fileSelectedNotice: 'File selected. In live mode, put the target path into "Config Path".',
     sourcePlaceholder: 'No config file selected. Using the built-in sample config.',
+    transientPromptHelpTitle: 'Transient Prompt',
+    transientPromptHelp: [
+      ['Off', 'Keep the full prompt after every command.'],
+      ['Always simplify', 'Compress old prompts after commands run.'],
+      ['Simplify in same dir', 'Only compress when the working directory stays the same.'],
+    ],
+    instantPromptHelpTitle: 'Instant Prompt',
+    instantPromptHelp: [
+      ['Verbose', 'Show the prompt as early as possible with more details.'],
+      ['Quiet', 'Keep startup output cleaner with fewer prompt messages.'],
+      ['Off', 'Disable instant prompt.'],
+    ],
   },
 };
 
@@ -428,6 +454,38 @@ function SectionHeading({ title, description, right }) {
         ) : null}
       </Stack>
       {right}
+    </Group>
+  );
+}
+
+function SettingLabel({ title, helpTitle, helpItems }) {
+  return (
+    <Group gap={6} wrap="nowrap" align="center">
+      <Text span size="sm" fw={500}>
+        {title}
+      </Text>
+      {helpItems?.length ? (
+        <Tooltip
+          multiline
+          withArrow
+          width={280}
+          label={
+            <Stack gap={6}>
+              <Text size="sm" fw={700}>{helpTitle || title}</Text>
+              {helpItems.map(([name, desc]) => (
+                <Box key={name}>
+                  <Text size="sm" fw={600}>{name}</Text>
+                  <Text size="xs" c="dimmed">{desc}</Text>
+                </Box>
+              ))}
+            </Stack>
+          }
+        >
+          <ActionIcon variant="subtle" size="sm" radius="xl" aria-label={helpTitle || title}>
+            <IconHelpCircle size={15} />
+          </ActionIcon>
+        </Tooltip>
+      ) : null}
     </Group>
   );
 }
@@ -987,11 +1045,31 @@ function App({ colorScheme, language, onColorSchemeChange, onLanguageChange }) {
                       <Accordion.Panel>
                         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
                           {editorState.settingsCatalog.map(([name, type, label]) => {
+                            const translatedLabel = translateSettingLabel(name, label, language);
+                            const labelNode = (
+                              <SettingLabel
+                                title={translatedLabel}
+                                helpTitle={
+                                  name === 'POWERLEVEL9K_TRANSIENT_PROMPT'
+                                    ? t.transientPromptHelpTitle
+                                    : name === 'POWERLEVEL9K_INSTANT_PROMPT'
+                                      ? t.instantPromptHelpTitle
+                                      : null
+                                }
+                                helpItems={
+                                  name === 'POWERLEVEL9K_TRANSIENT_PROMPT'
+                                    ? t.transientPromptHelp
+                                    : name === 'POWERLEVEL9K_INSTANT_PROMPT'
+                                      ? t.instantPromptHelp
+                                      : null
+                                }
+                              />
+                            );
                             if (type === 'number') {
                               return (
                                 <NumberInput
                                   key={name}
-                                  label={translateSettingLabel(name, label, language)}
+                                  label={labelNode}
                                   value={Number(editorState.settings[name] || 0)}
                                   onChange={(value) =>
                                     setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: String(value || 0) } }))
@@ -1019,7 +1097,7 @@ function App({ colorScheme, language, onColorSchemeChange, onLanguageChange }) {
                               return (
                                 <Select
                                   key={name}
-                                  label={translateSettingLabel(name, label, language)}
+                                  label={labelNode}
                                   data={data}
                                   value={editorState.settings[name] || data[0].value}
                                   onChange={(value) =>
@@ -1031,7 +1109,7 @@ function App({ colorScheme, language, onColorSchemeChange, onLanguageChange }) {
                             return (
                               <TextInput
                                 key={name}
-                                label={translateSettingLabel(name, label, language)}
+                                label={labelNode}
                                 value={editorState.settings[name] || ''}
                                 onChange={(event) =>
                                   setEditorState((current) => ({
