@@ -702,11 +702,11 @@ function App() {
                 </Group>
               </Paper>
 
-              <Paper withBorder radius="md" p="lg" pos="sticky" top={12} style={{ zIndex: 10 }}>
+              <Paper withBorder radius="md" p="lg">
                 <Stack gap="lg">
                   <SectionHeading
-                    title="预览工作台"
-                    description="先看 prompt 排布，再调整段位和参数。"
+                    title="工作台"
+                    description="改路径、目录和文件来源。"
                     right={
                       <Group gap="xs">
                         <Badge variant="light" color="teal">{usesRealMode ? '可保存' : '仅预览'}</Badge>
@@ -714,49 +714,54 @@ function App() {
                       </Group>
                     }
                   />
-                  <Grid gutter="lg" align="start">
-                    <Grid.Col span={{ base: 12, xl: 8 }}>
-                      <PreviewPanel editorState={editorState} snapshot={snapshot} />
-                    </Grid.Col>
-                    <Grid.Col span={{ base: 12, xl: 4 }}>
-                      <Stack gap="sm">
-                        <TextInput
-                          label="配置路径"
-                          value={configPath}
-                          disabled={!usesRealMode}
-                          onChange={(event) => setConfigPath(event.currentTarget.value)}
-                          onBlur={handlePathReload}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') event.currentTarget.blur();
-                          }}
-                        />
-                        <TextInput
-                          label="预览目录"
-                          value={previewDir}
-                          disabled={!usesRealMode}
-                          onChange={(event) => setPreviewDir(event.currentTarget.value)}
-                          onBlur={handlePreviewDirBlur}
-                        />
-                        <SimpleGrid cols={2} spacing="sm">
-                          <FileButton onChange={handleFile} accept=".zsh,.txt,text/plain">
-                            {(props) => (
-                              <Button {...props} variant="default" fullWidth leftSection={<IconUpload size={16} />}>
-                                选择文件
-                              </Button>
-                            )}
-                          </FileButton>
-                          <Button
-                            variant="default"
-                            fullWidth
+                  <Grid gutter="md" align="end">
+                    <Grid.Col span={{ base: 12, xl: 6 }}>
+                      <FileButton onChange={handleFile} accept=".zsh,.txt,text/plain">
+                        {(props) => (
+                          <TextInput
+                            label="配置路径"
+                            value={configPath}
                             disabled={!usesRealMode}
-                            leftSection={<IconFolderOpen size={16} />}
+                            onChange={(event) => setConfigPath(event.currentTarget.value)}
+                            onBlur={handlePathReload}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') event.currentTarget.blur();
+                            }}
+                            rightSection={
+                              <ActionIcon {...props} variant="subtle" size="sm" aria-label="选择配置文件">
+                                <IconUpload size={16} />
+                              </ActionIcon>
+                            }
+                          />
+                        )}
+                      </FileButton>
+                    </Grid.Col>
+                    <Grid.Col span={{ base: 12, xl: 6 }}>
+                      <TextInput
+                        label="预览目录"
+                        value={previewDir}
+                        disabled={!usesRealMode}
+                        onChange={(event) => setPreviewDir(event.currentTarget.value)}
+                        onBlur={handlePreviewDirBlur}
+                        rightSection={
+                          <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            aria-label="选择目录"
+                            disabled={!usesRealMode}
                             onClick={handleSelectDir}
                           >
-                            选择目录
-                          </Button>
-                        </SimpleGrid>
+                            <IconFolderOpen size={16} />
+                          </ActionIcon>
+                        }
+                      />
+                    </Grid.Col>
+                    <Grid.Col span={12}>
+                      <Group justify="space-between" align="center">
+                        <Text c="dimmed" size="sm">
+                          {usesRealMode ? '路径或目录改完后离开输入框会自动重读。' : '可导入 .p10k.zsh 文件做模拟编辑。'}
+                        </Text>
                         <Button
-                          fullWidth
                           disabled={!usesRealMode}
                           leftSection={<IconTerminal2 size={16} />}
                           onClick={() => {
@@ -769,12 +774,19 @@ function App() {
                         >
                           打开交互 zsh
                         </Button>
-                        <Text c="dimmed" size="sm">
-                          {usesRealMode ? '路径或目录改完后离开输入框会自动重读。' : '可导入 .p10k.zsh 文件做模拟编辑。'}
-                        </Text>
-                      </Stack>
+                      </Group>
                     </Grid.Col>
                   </Grid>
+                </Stack>
+              </Paper>
+
+              <Paper withBorder radius="md" p="lg" pos="sticky" top={12} style={{ zIndex: 10 }}>
+                <Stack gap="md">
+                  <SectionHeading
+                    title="预览工作台"
+                    description="只固定预览区域，滚动时持续对照效果。"
+                  />
+                  <PreviewPanel editorState={editorState} snapshot={snapshot} />
                 </Stack>
               </Paper>
 
