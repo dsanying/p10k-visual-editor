@@ -752,30 +752,30 @@ function App() {
                         }
                       />
                     </Grid.Col>
-                    <Grid.Col span={12}>
-                      <Group justify="end" align="center">
-                        <Button
-                          disabled={!usesRealMode}
-                          leftSection={<IconTerminal2 size={16} />}
-                          onClick={() => {
-                            setDialogOpen(true);
-                            setTimeout(() => {
-                              if (!terminalRunning()) startTerminal();
-                              else terminalRef.current?.focus();
-                            }, 0);
-                          }}
-                        >
-                          打开交互 zsh
-                        </Button>
-                      </Group>
-                    </Grid.Col>
                   </Grid>
                 </Stack>
               </Paper>
 
               <Paper withBorder radius="md" p="lg" pos="sticky" top={12} style={{ zIndex: 10 }}>
                 <Stack gap="md">
-                  <SectionHeading title="预览工作台" />
+                  <SectionHeading
+                    title="预览工作台"
+                    right={
+                      <Button
+                        disabled={!usesRealMode}
+                        leftSection={<IconTerminal2 size={16} />}
+                        onClick={() => {
+                          setDialogOpen(true);
+                          setTimeout(() => {
+                            if (!terminalRunning()) startTerminal();
+                            else terminalRef.current?.focus();
+                          }, 0);
+                        }}
+                      >
+                        打开交互 zsh
+                      </Button>
+                    }
+                  />
                   <PreviewPanel editorState={editorState} snapshot={snapshot} />
                 </Stack>
               </Paper>
