@@ -689,9 +689,6 @@ function App() {
                       <Badge variant="light" color="blue">{leftEnabledCount} 个左侧段</Badge>
                       <Badge variant="light" color="gray">{rightEnabledCount} 个右侧段</Badge>
                     </Group>
-                    <Text c="dimmed" size="sm">
-                      {usesRealMode ? `正在编辑 ${editorState.path}` : '当前未连接本机后端'}
-                    </Text>
                   </Stack>
                   <Group>
                     <Button variant="default" leftSection={<IconRefresh size={16} />} onClick={() => handlePathReload()}>
@@ -706,7 +703,6 @@ function App() {
                 <Stack gap="lg">
                   <SectionHeading
                     title="工作台"
-                    description="改路径、目录和文件来源。"
                     right={
                       <Group gap="xs">
                         <Badge variant="light" color="teal">{usesRealMode ? '可保存' : '仅预览'}</Badge>
@@ -757,10 +753,7 @@ function App() {
                       />
                     </Grid.Col>
                     <Grid.Col span={12}>
-                      <Group justify="space-between" align="center">
-                        <Text c="dimmed" size="sm">
-                          {usesRealMode ? '路径或目录改完后离开输入框会自动重读。' : '可导入 .p10k.zsh 文件做模拟编辑。'}
-                        </Text>
+                      <Group justify="end" align="center">
                         <Button
                           disabled={!usesRealMode}
                           leftSection={<IconTerminal2 size={16} />}
@@ -782,10 +775,7 @@ function App() {
 
               <Paper withBorder radius="md" p="lg" pos="sticky" top={12} style={{ zIndex: 10 }}>
                 <Stack gap="md">
-                  <SectionHeading
-                    title="预览工作台"
-                    description="只固定预览区域，滚动时持续对照效果。"
-                  />
+                  <SectionHeading title="预览工作台" />
                   <PreviewPanel editorState={editorState} snapshot={snapshot} />
                 </Stack>
               </Paper>
@@ -795,7 +785,6 @@ function App() {
                   <Stack gap="md">
                     <SectionHeading
                       title="左侧显示"
-                      description="路径、Git、换行等主要信息。"
                       right={<Badge variant="light" color="blue">{leftEnabledCount} / {editorState.leftOrder.length}</Badge>}
                     />
                     <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="sm">
@@ -808,7 +797,6 @@ function App() {
                   <Stack gap="md">
                     <SectionHeading
                       title="右侧显示"
-                      description="状态、耗时、版本、时间等辅助信息。"
                       right={<Badge variant="light" color="gray">{rightEnabledCount} / {editorState.rightOrder.length}</Badge>}
                     />
                     <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="sm">
@@ -821,10 +809,7 @@ function App() {
               <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md">
                 <Paper withBorder radius="md" p="lg">
                   <Stack gap="md">
-                    <SectionHeading
-                      title="常用参数"
-                      description="直接改常用开关和格式。"
-                    />
+                    <SectionHeading title="常用参数" />
                     <Text c="dimmed" size="sm">
                       保存后执行 <Code>source ~/.p10k.zsh</Code> 或 <Code>exec zsh</Code> 生效。
                     </Text>
@@ -884,7 +869,6 @@ function App() {
                       <Accordion.Control>
                         <SectionHeading
                           title="原始配置"
-                          description="需要时再展开查看完整内容。"
                         />
                       </Accordion.Control>
                       <Accordion.Panel>
