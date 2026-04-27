@@ -145,8 +145,8 @@ export const fallbackSettingsCatalog = [
   ['POWERLEVEL9K_COMMAND_EXECUTION_TIME_PREFIX', 'string', '耗时前缀'],
   ['POWERLEVEL9K_TIME_FORMAT', 'string', '时间格式'],
   ['POWERLEVEL9K_TIME_PREFIX', 'string', '时间前缀'],
-  ['POWERLEVEL9K_TRANSIENT_PROMPT', 'raw', 'Transient prompt'],
-  ['POWERLEVEL9K_INSTANT_PROMPT', 'raw', 'Instant prompt'],
+  ['POWERLEVEL9K_TRANSIENT_PROMPT', 'raw', '瞬态提示'],
+  ['POWERLEVEL9K_INSTANT_PROMPT', 'raw', '即时提示'],
 ];
 
 const knownSegmentIds = new Set(fallbackCatalog.map(([id]) => id));

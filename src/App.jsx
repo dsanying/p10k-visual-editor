@@ -756,6 +756,106 @@ function App() {
                 </Stack>
               </Paper>
 
+              <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md">
+                <Paper withBorder radius="md" p="lg">
+                  <Accordion variant="separated" radius="md" defaultValue={null}>
+                    <Accordion.Item value="common-settings">
+                      <Accordion.Control>
+                        <SectionHeading title="常用参数" />
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                          {editorState.settingsCatalog.map(([name, type, label]) => {
+                            if (type === 'number') {
+                              return (
+                                <NumberInput
+                                  key={name}
+                                  label={label}
+                                  value={Number(editorState.settings[name] || 0)}
+                                  onChange={(value) =>
+                                    setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: String(value || 0) } }))
+                                  }
+                                />
+                              );
+                            }
+                            if (type === 'boolean' || name === 'POWERLEVEL9K_TRANSIENT_PROMPT' || name === 'POWERLEVEL9K_INSTANT_PROMPT') {
+                              const data = type === 'boolean'
+                                ? [
+                                  { value: 'true', label: '开启' },
+                                  { value: 'false', label: '关闭' },
+                                ]
+                                : name === 'POWERLEVEL9K_TRANSIENT_PROMPT'
+                                  ? [
+                                    { value: 'off', label: '关闭' },
+                                    { value: 'always', label: '始终简化' },
+                                    { value: 'same-dir', label: '同目录时简化' },
+                                  ]
+                                  : [
+                                    { value: 'verbose', label: '完整' },
+                                    { value: 'quiet', label: '静默' },
+                                    { value: 'off', label: '关闭' },
+                                  ];
+                              return (
+                                <Select
+                                  key={name}
+                                  label={label}
+                                  data={data}
+                                  value={editorState.settings[name] || data[0].value}
+                                  onChange={(value) =>
+                                    setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: value || '' } }))
+                                  }
+                                />
+                              );
+                            }
+                            return (
+                              <TextInput
+                                key={name}
+                                label={label}
+                                value={editorState.settings[name] || ''}
+                                onChange={(event) =>
+                                  setEditorState((current) => ({
+                                    ...current,
+                                    settings: { ...current.settings, [name]: event.currentTarget.value },
+                                  }))
+                                }
+                              />
+                            );
+                          })}
+                        </SimpleGrid>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  </Accordion>
+                </Paper>
+
+                <Paper withBorder radius="md" p="lg">
+                  <Accordion variant="separated" radius="md" defaultValue={null}>
+                    <Accordion.Item value="raw-config">
+                      <Accordion.Control>
+                        <SectionHeading
+                          title="原始配置"
+                        />
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <Box
+                          component="pre"
+                          style={{
+                            margin: 0,
+                            padding: 16,
+                            borderRadius: 8,
+                            background: '#111719',
+                            color: '#e9ecef',
+                            overflow: 'auto',
+                            maxHeight: 420,
+                          }}
+                        >
+                          {rawConfig}
+                        </Box>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  </Accordion>
+                </Paper>
+              </SimpleGrid>
+
               <Paper withBorder radius="md" p="lg" pos="sticky" top={12} style={{ zIndex: 10 }}>
                 <Stack gap="md">
                   <SectionHeading
@@ -803,92 +903,6 @@ function App() {
                       {segmentCards('right')}
                     </SimpleGrid>
                   </Stack>
-                </Paper>
-              </SimpleGrid>
-
-              <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="md">
-                <Paper withBorder radius="md" p="lg">
-                  <Stack gap="md">
-                    <SectionHeading title="常用参数" />
-                    <Text c="dimmed" size="sm">
-                      保存后执行 <Code>source ~/.p10k.zsh</Code> 或 <Code>exec zsh</Code> 生效。
-                    </Text>
-                    <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-                      {editorState.settingsCatalog.map(([name, type, label]) => {
-                        if (type === 'number') {
-                          return (
-                            <NumberInput
-                              key={name}
-                              label={label}
-                              value={Number(editorState.settings[name] || 0)}
-                              onChange={(value) =>
-                                setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: String(value || 0) } }))
-                              }
-                            />
-                          );
-                        }
-                        if (type === 'boolean' || name === 'POWERLEVEL9K_TRANSIENT_PROMPT' || name === 'POWERLEVEL9K_INSTANT_PROMPT') {
-                          const data = type === 'boolean'
-                            ? ['true', 'false']
-                            : name === 'POWERLEVEL9K_TRANSIENT_PROMPT'
-                              ? ['off', 'always', 'same-dir']
-                              : ['verbose', 'quiet', 'off'];
-                          return (
-                            <Select
-                              key={name}
-                              label={label}
-                              data={data}
-                              value={editorState.settings[name] || data[0]}
-                              onChange={(value) =>
-                                setEditorState((current) => ({ ...current, settings: { ...current.settings, [name]: value || '' } }))
-                              }
-                            />
-                          );
-                        }
-                        return (
-                          <TextInput
-                            key={name}
-                            label={label}
-                            value={editorState.settings[name] || ''}
-                            onChange={(event) =>
-                              setEditorState((current) => ({
-                                ...current,
-                                settings: { ...current.settings, [name]: event.currentTarget.value },
-                              }))
-                            }
-                          />
-                        );
-                      })}
-                    </SimpleGrid>
-                  </Stack>
-                </Paper>
-
-                <Paper withBorder radius="md" p="lg">
-                  <Accordion variant="separated" radius="md" defaultValue="raw-config">
-                    <Accordion.Item value="raw-config">
-                      <Accordion.Control>
-                        <SectionHeading
-                          title="原始配置"
-                        />
-                      </Accordion.Control>
-                      <Accordion.Panel>
-                        <Box
-                          component="pre"
-                          style={{
-                            margin: 0,
-                            padding: 16,
-                            borderRadius: 8,
-                            background: '#111719',
-                            color: '#e9ecef',
-                            overflow: 'auto',
-                            maxHeight: 420,
-                          }}
-                        >
-                          {rawConfig}
-                        </Box>
-                      </Accordion.Panel>
-                    </Accordion.Item>
-                  </Accordion>
                 </Paper>
               </SimpleGrid>
             </Stack>
