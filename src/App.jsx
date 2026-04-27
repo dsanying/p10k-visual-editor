@@ -82,7 +82,7 @@ function translateSegmentMeta(id, fallbackLabel, fallbackDescription, language) 
 }
 
 function translateSettingLabel(name, fallbackLabel, language) {
-  if (language === 'zh-CN') return fallbackLabel;
+  if (language === 'zh-CN') return SETTINGS_LABELS_ZH[name] || fallbackLabel;
   return SETTINGS_LABELS_EN[name] || fallbackLabel;
 }
 
@@ -177,6 +177,19 @@ const UI_TEXT = {
     fileSelectedNotice: 'File selected. In live mode, put the target path into "Config Path".',
     sourcePlaceholder: 'No config file selected. Using the built-in sample config.',
   },
+};
+
+const SETTINGS_LABELS_ZH = {
+  POWERLEVEL9K_PROMPT_ADD_NEWLINE: 'Prompt 前空一行',
+  POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR: '第一行填充字符',
+  POWERLEVEL9K_DIR_MAX_LENGTH: '目录最大长度',
+  POWERLEVEL9K_DIR_MIN_COMMAND_COLUMNS: '命令区最小列数',
+  POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD: '耗时显示阈值（秒）',
+  POWERLEVEL9K_COMMAND_EXECUTION_TIME_PREFIX: '耗时前缀',
+  POWERLEVEL9K_TIME_FORMAT: '时间格式',
+  POWERLEVEL9K_TIME_PREFIX: '时间前缀',
+  POWERLEVEL9K_TRANSIENT_PROMPT: '瞬态提示',
+  POWERLEVEL9K_INSTANT_PROMPT: '即时提示',
 };
 
 const SETTINGS_LABELS_EN = {
