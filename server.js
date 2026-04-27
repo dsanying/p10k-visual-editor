@@ -84,6 +84,7 @@ const segmentCatalog = [
 ];
 
 const segmentLabels = new Map(segmentCatalog.map(([id, label]) => [id, label]));
+const knownSegmentIds = new Set(segmentCatalog.map(([id]) => id));
 
 const settingsCatalog = [
   ['POWERLEVEL9K_PROMPT_ADD_NEWLINE', 'boolean', 'Prompt 前空一行'],
@@ -166,8 +167,8 @@ function parseConfig(configPath = DEFAULT_CONFIG_PATH) {
   const text = readConfig(configPath);
   const leftItems = parseArray(text, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS');
   const rightItems = parseArray(text, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS');
-  const left = leftItems.filter((item) => item.enabled).map((item) => item.id);
-  const right = rightItems.filter((item) => item.enabled).map((item) => item.id);
+  const left = leftItems.filter((item) => item.enabled && knownSegmentIds.has(item.id)).map((item) => item.id);
+  const right = rightItems.filter((item) => item.enabled && knownSegmentIds.has(item.id)).map((item) => item.id);
   const settings = Object.fromEntries(
     settingsCatalog.map(([name]) => [name, parseScalar(text, name)])
   );
@@ -177,20 +178,9 @@ function parseConfig(configPath = DEFAULT_CONFIG_PATH) {
     left,
     right,
     settings,
-    catalog: catalogWithConfigSegments(leftItems, rightItems),
+    catalog: segmentCatalog,
     settingsCatalog,
   };
-}
-
-function catalogWithConfigSegments(...groups) {
-  const catalog = [...segmentCatalog];
-  const known = new Set(catalog.map(([id]) => id));
-  for (const item of groups.flat()) {
-    if (known.has(item.id)) continue;
-    known.add(item.id);
-    catalog.push([item.id, item.comment || item.id, '这个段来自你的 .p10k.zsh，当前编辑器暂时没有内置中文说明']);
-  }
-  return catalog;
 }
 
 function runCommand(command, args, cwd) {
@@ -420,8 +410,14 @@ function renderArray(name, selected, sourceItems = []) {
   const selectedSet = new Set(selected);
   const selectedLines = selected.map((id) => `    ${id.padEnd(24)}# ${labelFor(id)}`);
   const sourceLabels = new Map(sourceItems.map((item) => [item.id, item.comment]));
+  const passthroughUnknownLines = sourceItems
+    .filter((item) => !knownSegmentIds.has(item.id))
+    .map((item) =>
+      item.enabled
+        ? `    ${item.id.padEnd(24)}# ${item.comment || item.id}`
+        : `    # ${item.id.padEnd(22)}# ${item.comment || item.id}`
+    );
   const disabledIds = uniqueIds([
-    ...sourceItems.map((item) => item.id),
     ...segmentCatalog.map(([id]) => id),
   ]);
   const disabledLines = disabledIds
@@ -430,6 +426,7 @@ function renderArray(name, selected, sourceItems = []) {
   return [
     `typeset -g ${name}=(`,
     ...selectedLines,
+    ...passthroughUnknownLines,
     ...disabledLines,
     '  )',
   ].join('\n');

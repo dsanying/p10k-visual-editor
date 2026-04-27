@@ -149,6 +149,8 @@ export const fallbackSettingsCatalog = [
   ['POWERLEVEL9K_INSTANT_PROMPT', 'raw', 'Instant prompt'],
 ];
 
+const knownSegmentIds = new Set(fallbackCatalog.map(([id]) => id));
+
 export function previewState() {
   return normalizeEditorState({
     path: '示例配置',
@@ -174,8 +176,8 @@ export function previewState() {
 export function normalizeEditorState(base) {
   const catalog = base.catalog || fallbackCatalog;
   const catalogIds = catalog.map(([id]) => id);
-  const left = [...(base.left || [])];
-  const right = [...(base.right || [])];
+  const left = [...(base.left || [])].filter((id) => knownSegmentIds.has(id));
+  const right = [...(base.right || [])].filter((id) => knownSegmentIds.has(id));
   const settings = { ...Object.fromEntries(fallbackSettingsCatalog.map(([name]) => [name, ''])), ...(base.settings || {}) };
   return {
     ...base,
@@ -184,8 +186,8 @@ export function normalizeEditorState(base) {
     settings,
     catalog,
     settingsCatalog: base.settingsCatalog || fallbackSettingsCatalog,
-    leftOrder: [...catalogIds, ...left.filter((id) => !catalogIds.includes(id))],
-    rightOrder: [...catalogIds, ...right.filter((id) => !catalogIds.includes(id))],
+    leftOrder: [...catalogIds],
+    rightOrder: [...catalogIds],
     leftPromptOrder: [...left],
     rightPromptOrder: [...right],
   };
@@ -194,9 +196,11 @@ export function normalizeEditorState(base) {
 export function stateFromConfigText(text, name) {
   const left = parseArrayText(text, 'POWERLEVEL9K_LEFT_PROMPT_ELEMENTS')
     .filter((item) => item.enabled)
+    .filter((item) => knownSegmentIds.has(item.id))
     .map((item) => item.id);
   const right = parseArrayText(text, 'POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS')
     .filter((item) => item.enabled)
+    .filter((item) => knownSegmentIds.has(item.id))
     .map((item) => item.id);
   const settings = Object.fromEntries(
     fallbackSettingsCatalog.map(([settingName]) => [settingName, parseScalarText(text, settingName)])
@@ -277,20 +281,27 @@ export function fallbackConfigText() {
 }
 
 function replaceArrayText(text, name, selected) {
-  const rendered = renderArrayText(name, selected);
+  const rendered = renderArrayText(name, selected, parseArrayText(text, name));
   const pattern = new RegExp(`typeset -g ${name}=\\([\\s\\S]*?\\n  \\)`);
   if (pattern.test(text)) return text.replace(pattern, rendered);
   return `${text.trimEnd()}\n\n${rendered}\n`;
 }
 
-function renderArrayText(name, selected) {
+function renderArrayText(name, selected, sourceItems = []) {
   const selectedSet = new Set(selected);
   const selectedLines = selected.map((id) => `    ${id.padEnd(24)}# ${labelForSegment(id)}`);
+  const passthroughUnknownLines = sourceItems
+    .filter((item) => !knownSegmentIds.has(item.id))
+    .map((item) =>
+      item.enabled
+        ? `    ${item.id.padEnd(24)}# ${item.comment || item.id}`
+        : `    # ${item.id.padEnd(22)}# ${item.comment || item.id}`
+    );
   const disabledLines = fallbackCatalog
     .map(([id]) => id)
     .filter((id) => !selectedSet.has(id))
     .map((id) => `    # ${id.padEnd(22)}# ${labelForSegment(id)}`);
-  return [`typeset -g ${name}=(`, ...selectedLines, ...disabledLines, '  )'].join('\n');
+  return [`typeset -g ${name}=(`, ...selectedLines, ...passthroughUnknownLines, ...disabledLines, '  )'].join('\n');
 }
 
 function labelForSegment(id) {
